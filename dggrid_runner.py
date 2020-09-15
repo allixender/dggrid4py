@@ -172,6 +172,27 @@ cell_output_types = (
     'TEXT'
 )
 
+output_address_types = (
+    'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
+    'Q2DI', # quad number and (i, j) coordinates on that quad
+    'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
+    'INTERLEAVE', # digit-interleaved form of Q2DI, only supported for parameter output_address_type; only available for hexagonal aperture 3 and 4 grids
+    'PLANE', # (x, y) coordinates on unfolded ISEA plane,  only supported for parameter output_address_type;
+    'Q2DD', # quad number and (x, y) coordinates on that quad
+    'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
+    'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
+    'AIGEN'  # Arc/Info Generate file format
+)
+
+input_address_types = (
+    'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
+    'Q2DI', # quad number and (i, j) coordinates on that quad
+    'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
+    'Q2DD', # quad number and (x, y) coordinates on that quad
+    'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
+    'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
+    'AIGEN'  # Arc/Info Generate file format
+)
 
 parameters = (
     'bin_coverage',
@@ -642,18 +663,19 @@ class DGGRIDv7(object):
     def run(self, dggs_meta_ops):
 
         curdir = os.getcwd()
+        tmp_id = uuid.uuid4()
 
         # subprocess.call / Popen swat_exec, check if return val is 0 or not
         # yield logs?
         try:
             os.chdir(self.working_dir)
 
-            with open('metafile', 'w', encoding='utf-8') as metafile:
+            with open('metafile_' + str(tmp_id), 'w', encoding='utf-8') as metafile:
                 for line in dggs_meta_ops:
                     metafile.write(line + '\n')
             
             logs = []
-            o = subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            o = subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             
             while o.poll() is None:
                 for b_line in o.stdout:
@@ -666,6 +688,10 @@ class DGGRIDv7(object):
             
             if o.returncode == 0:
                 self.last_run_succesful = True
+                try:
+                    os.remove( 'metafile_' + str(tmp_id) )
+                except Exception:
+                    pass
             else:
                 self.last_run_succesful = False
 
@@ -701,10 +727,8 @@ class DGGRIDv7(object):
 
         # clip_subset_types
         if subset_conf['clip_subset_type'] == 'WHOLE_EARTH':
-            print('whole earth')
             metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
         elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
-            print('do it with file input')
             metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
             metafile.append("clip_region_files " + subset_conf['clip_region_files'])
         elif subset_conf['clip_subset_type'] == 'SEQNUMS':
@@ -718,14 +742,11 @@ class DGGRIDv7(object):
         if 'cell_output_type' in output_conf.keys():
             if output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT'] and not output_conf['cell_output_file_name'] is None:
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
-                    print(f"do it with file output {elem} : {output_conf[elem]}")
                     metafile.append(f"{elem} " + output_conf[elem])
             elif output_conf['cell_output_type'] in [ 'GDAL'] and not output_conf['cell_output_gdal_format'] is None and not output_conf['cell_output_file_name'] is None:
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
-                    print(f"do it with file output {elem} : {output_conf[elem]}")
                     metafile.append(f"{elem} " + output_conf[elem])
             elif output_conf['cell_output_type'] in [ 'NONE']:
-                print('no cellfile output')
                 metafile.append("cell_output_type NONE")
             
             # check join cell grid params add to metafile
@@ -734,14 +755,11 @@ class DGGRIDv7(object):
         if 'point_output_type' in output_conf.keys():
             if output_conf['point_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT'] and not output_conf['point_output_file_name'] is None:
                 for elem in filter(lambda x: x.startswith('point_output_') , output_conf.keys()):
-                    print(f"do it with file output {elem} : {output_conf[elem]}")
                     metafile.append(f"{elem} " + output_conf[elem])
             elif output_conf['point_output_type'] in [ 'GDAL'] and not output_conf['point_output_gdal_format'] is None and not output_conf['point_output_file_name'] is None:
                 for elem in filter(lambda x: x.startswith('point_output_') , output_conf.keys()):
-                    print(f"do it with file output {elem} : {output_conf[elem]}")
                     metafile.append(f"{elem} " + output_conf[elem])
             elif output_conf['point_output_type'] in [ 'NONE']:
-                print('no point file output')
                 metafile.append("point_output_type NONE")
             
             # check join point grid params add to metafile
@@ -759,7 +777,7 @@ class DGGRIDv7(object):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def coord_conversion(self, dggs):
+    def grid_transform(self, dggs, subset_conf, output_conf):
         """
         Address Conversion. Transform a file of locations from one address form (such as longitude/latitude) to another (such as DGG cell indexes).
         """
@@ -767,8 +785,38 @@ class DGGRIDv7(object):
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
-        raise ValueError("Not yet implemented")
-        # return None
+        dggs_config_meta = dg_grid_meta(dggs)
+
+        for cmd in dggs_config_meta:
+            metafile.append(cmd)
+        
+        # transform input_types
+        if 'input_file_name' in subset_conf.keys() and 'input_address_type' in subset_conf.keys() and subset_conf['input_address_type'] in input_address_types:
+            for elem in filter(lambda x: x.startswith('input_') , subset_conf.keys()):
+                metafile.append(f"{elem} " + subset_conf[elem])
+        else:
+            raise ValueError('no input filename or type given')
+        
+        # join grid gen params add to metafile
+
+        # transform output_types
+        if 'output_file_name' in output_conf.keys() and 'output_address_type' in output_conf.keys() and output_conf['output_address_type'] in output_address_types:
+            for elem in filter(lambda x: x.startswith('output_') , output_conf.keys()):
+                metafile.append(f"{elem} " + output_conf[elem])
+        else:
+            raise ValueError('no output filename or type given')
+        
+        result = self.run(metafile)
+
+        if not result == 0:
+            if self.capture_logs == True:
+                message = f"some error happened under the hood of dggrid (exit code {result}): " + self.capture_logs
+                raise ValueError(message)
+            else:
+                message = f"some error happened under the hood of dggrid (exit code {result}), try capture_logs=True for dggrid instance"
+                raise ValueError(message)
+
+        return { 'metafile': metafile, 'output_conf': output_conf }
 
 
     def point_value_binning(self, dggs):
@@ -801,6 +849,8 @@ class DGGRIDv7(object):
         """
         Output Grid Statistics. Output a table of grid characteristics for the specified DGG.
         """
+        import copy
+
         np_table_switch = True
         try:
             import numpy as np
@@ -817,7 +867,7 @@ class DGGRIDv7(object):
             metafile.append(cmd)
         
         # we need to capturethe logs for this one:
-        save_state = self.capture_logs
+        save_state = copy.copy(self.capture_logs)
         self.capture_logs == True
 
         result = self.run(metafile)
