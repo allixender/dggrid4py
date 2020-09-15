@@ -34,7 +34,7 @@ dggs_types = (
     'FULLER4H', # FULLER projection with hexagon cells and an aperture of 4
     'FULLER4T', # FULLER projection with triangle cells and an aperture of 4
     'FULLER4D', # FULLER projection with diamond cells and an aperture of 4
-    'FULLER43H' # FULLER projection with hexagon cells and a mixed sequence of aperture 4 resolutions followed by aperture 3 resolutions
+    'FULLER43H', # FULLER projection with hexagon cells and a mixed sequence of aperture 4 resolutions followed by aperture 3 resolutions
     'FULLER7H', # FULLER projection with hexagon cells and an aperture of 7
 )
 
@@ -333,6 +333,11 @@ def dgselect(dggs_type, **kwargs):
                         ]:
                 if res_opt in kwargs.keys():
                     dggs.set_par(res_opt, kwargs[res_opt])
+            
+            if aperture == 43:
+                if 'mixed_aperture_level' in kwargs.keys():
+                    dggs.set_par('mixed_aperture_level', kwargs['mixed_aperture_level'])
+                
         
         elif dggs_type == 'CUSTOM':
             # load and insert grid definition from dggs obj
@@ -385,7 +390,8 @@ def dg_grid_meta(dggs):
         'res' : 'dggs_res_spec',
         'precision': 'precision',
         'area' : 'dggs_res_specify_area',
-        'cls_val' : 'dggs_res_specify_intercell_distance'
+        'cls_val' : 'dggs_res_specify_intercell_distance',
+        'mixed_aperture_level' : 'dggs_num_aperture_4_res'
     }
     metafile = []
     
@@ -401,8 +407,9 @@ def dg_grid_meta(dggs):
     for res_opt in [ 'res', # dggs_res_spec
                     'precision', # default 7
                     'area', # dggs_res_specify_area
-                    'cls_val' # dggs_res_specify_intercell_distance
-                            ]:
+                    'cls_val', # dggs_res_specify_intercell_distance
+                    'mixed_aperture_level'  # dggs_num_aperture_4_res 5
+                    ]:
         if not dggs.get_par(res_opt, None) is None:
             opt_val = dggs.get_par(res_opt, None)
             if not opt_val is None:
@@ -430,6 +437,8 @@ class Dggs(object):
         azimuth_deg: float   #  = 0
         pole_lat_deg: float  #  = 58.28252559
         pole_lon_deg: float  # = 11.25
+
+        mixed_aperture_level:  # e.g. 5 -> dggs_num_aperture_4_res 5  for ISEA_43_H etc
         metafile = []
     """
 
@@ -492,6 +501,8 @@ class Dggs(object):
             self.pole_lat_deg = par_value
         if par_key == 'pole_lon_deg':
             self.pole_lon_deg = par_value
+        if par_key == 'mixed_aperture_level':
+            self.mixed_aperture_level = par_value
         
         return self
     
@@ -570,6 +581,11 @@ class Dggs(object):
         if par_key == 'pole_lon_deg':
             try:
                 return self.pole_lon_deg
+            except AttributeError:
+                return alternative
+        if par_key == 'mixed_aperture_level':
+            try:
+                return self.mixed_aperture_level
             except AttributeError:
                 return alternative
         else:
@@ -785,10 +801,53 @@ class DGGRIDv7(object):
         """
         Output Grid Statistics. Output a table of grid characteristics for the specified DGG.
         """
+        np_table_switch = True
+        try:
+            import numpy as np
+        except ImportError:
+            np_table_switch = False
+            
         dggrid_operation = 'OUTPUT_STATS'
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
-        raise ValueError("Not yet implemented")
-        # return None
+        dggs_config_meta = dg_grid_meta(dggs)
+
+        for cmd in dggs_config_meta:
+            metafile.append(cmd)
+        
+        # we need to capturethe logs for this one:
+        save_state = self.capture_logs
+        self.capture_logs == True
+
+        result = self.run(metafile)
+
+        if not result == 0:
+            if self.capture_logs == True:
+                message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
+                raise ValueError(message)
+            else:
+                message = f"some error happened under the hood of dggrid (exit code {result}), try capture_logs=True for dggrid instance"
+                raise ValueError(message)
+        
+        # set capture logs back to original
+        self.capture_logs == save_state
+
+        table = []
+        earth_line_switch = False
+        earth_radius_info = ''
+        for line in self.last_run_logs.split('\n'):
+            if "Earth Radius" in line:
+                earth_line_switch = True
+                earth_radius_info = line.strip().replace(',','')
+
+            if earth_line_switch == True:
+                table.append(line.strip().replace(',',''))
+        
+        if np_table_switch == True:
+            np_table = np.genfromtxt(table, skip_header=3)
+
+            return { 'metafile': metafile, 'output_conf': {'stats_output': np_table, 'earth_radius_info': earth_radius_info } }
+        else:
+            return { 'metafile': metafile, 'output_conf': {'stats_output': table, 'earth_radius_info': earth_radius_info } }
 

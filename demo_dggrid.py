@@ -139,6 +139,56 @@ def example_gdal(dggrid_instance, example_src):
     return dggs_ops
 
 
+def generate_defs_1_5(dggrid_instance):
+
+    from dggrid_runner import dggs_types
+
+    for gridtype in filter(lambda x: x.startswith('CUSTOM') == False, dggs_types):
+        for res in range(1,6):
+            print(f"dgselect(dggs_type = '{gridtype}', res= {res})")
+            fname = f"DGGRID_{gridtype}_res_{res}"
+
+            if '43' in gridtype and res >= 4:
+                mixed_aperture_level = 4
+
+            dggs = dgselect(dggs_type = gridtype, res= res)
+
+            subset_conf = {
+                'clip_subset_type': 'WHOLE_EARTH',
+                'update_frequency': 100000,
+                'geodetic_densify': 0.0
+                }
+
+            output_conf = {
+                'cell_output_type': 'GEOJSON',
+                'cell_output_file_name': fname,
+                # 'densification': 6
+                }
+
+            dggs_ops = dggrid_instance.grid_gen(dggs, subset_conf, output_conf )
+
+            print(dggs_ops)
+
+
+
+def example_table_stats(dggrid_instance):
+    """
+    # specify the operation
+    dggrid_operation OUTPUT_STATS
+
+    # specify the DGG
+    dggs_type ISEA43H
+    dggs_num_aperture_4_res 5
+    dggs_res_spec 15
+    """
+
+    dggs = dgselect(dggs_type = 'ISEA43H', res= 10, mixed_aperture_level= 5)
+
+    dggs_ops = dggrid_instance.grid_stats(dggs)
+
+    return dggs_ops
+
+
 if __name__ == '__main__':
 
     dggrid = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir='/tmp/grids')
@@ -147,14 +197,26 @@ if __name__ == '__main__':
 
     print( dggrid.is_runnable() == True )
 
-    result_info = example_generate(dggrid)
-    print(result_info)
+    # ------------- GENERATE_GRID
+    # result_info = example_generate(dggrid)
+    # print(result_info)
 
-    result_info = example_aigenerate(dggrid, example_src)
-    print(result_info)
+    # result_info = example_aigenerate(dggrid, example_src)
+    # print(result_info)
 
-    result_info = example_gdal(dggrid, example_src)
-    print(result_info)
+    # result_info = example_gdal(dggrid, example_src)
+    # print(result_info)
+
+    generate_defs_1_5(dggrid)
+
+    # ----------- OUTPUT_STATS ----
+    # result_info = example_table_stats(dggrid)
+    # print(result_info)
+
+    # import pandas as pd
+    # print(pd.DataFrame(result_info['output_conf']['stats_output']))
+
+
     
 
 
