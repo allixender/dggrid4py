@@ -868,7 +868,7 @@ class DGGRIDv7(object):
         
         # we need to capturethe logs for this one:
         save_state = copy.copy(self.capture_logs)
-        self.capture_logs == True
+        self.capture_logs = True
 
         result = self.run(metafile)
 
@@ -879,9 +879,6 @@ class DGGRIDv7(object):
             else:
                 message = f"some error happened under the hood of dggrid (exit code {result}), try capture_logs=True for dggrid instance"
                 raise ValueError(message)
-        
-        # set capture logs back to original
-        self.capture_logs == save_state
 
         table = []
         earth_line_switch = False
@@ -894,6 +891,9 @@ class DGGRIDv7(object):
             if earth_line_switch == True:
                 table.append(line.strip().replace(',',''))
         
+        # set capture logs back to original
+        self.capture_logs == save_state
+
         if np_table_switch == True:
             np_table = np.genfromtxt(table, skip_header=3)
 

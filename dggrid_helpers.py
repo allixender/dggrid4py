@@ -9,7 +9,7 @@ import subprocess
 import json
 import traceback
 import chardet
-import numpy as numpy
+import numpy as np
 import pandas as pd
 
 import fiona
@@ -25,12 +25,12 @@ from shapely.geometry import Polygon, box, shape
 from dggrid_runner import DGGRIDv7, Dggs, dgselect
 
 
-def create_grid_cells(dggs_type, resolution, clip_geom=None, capture_logs=False, silent=False):
+def create_grid_cells(dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, capture_logs=False, silent=False):
 
     tmp_id = uuid.uuid4()
     tmp_dir = '/tmp/grids' 
     dggrid_instance = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir=tmp_dir, capture_logs=capture_logs, silent=silent )
-    dggs = dgselect(dggs_type = dggs_type, res= resolution)
+    dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
     
     subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
@@ -63,6 +63,22 @@ def create_grid_cells(dggs_type, resolution, clip_geom=None, capture_logs=False,
     return gdf
 
 
+def grid_stats_table(dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, capture_logs=False, silent=False):
+    tmp_id = uuid.uuid4()
+    tmp_dir = '/tmp/grids' 
+    dggrid_instance = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir=tmp_dir, capture_logs=capture_logs, silent=silent )
+    dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+
+    dggs_ops = dggrid_instance.grid_stats(dggs)
+    df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
+
+    df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
+    df['Resolution'] = df['Resolution'].astype(int)
+    df['Cells'] = df['Cells'].astype(np.int64)
+    return df
+
+
+
 def get_cell_ids():
     pass
 
@@ -83,14 +99,22 @@ def proto_helpers(dggrid_instance):
 
 if __name__ == '__main__':
 
-    gdf1 = create_grid_cells('ISEA4T', 3, clip_geom=None, silent=False)
-    print(gdf1.head())
-
     est_bound = shapely.geometry.box(20.37,57.52, 28.2,60.0 )
+    
+    # gdf1 = create_grid_cells('ISEA4T', 3, clip_geom=None, silent=False)
+    # print(gdf1.head())
 
-    gdf2 = create_grid_cells('ISEA7H', 5, clip_geom=est_bound, silent=True)
-    print(gdf2.head())
+    # gdf2 = create_grid_cells('ISEA7H', 5, clip_geom=est_bound, silent=True)
+    # print(gdf2.head())
+    # gdf2.to_file('/tmp/grids/est_shape_isea7h_5.shp')
 
-    gdf2.to_file('/tmp/grids/est_shape_isea7h_5.shp')
+    gdf3 = create_grid_cells('ISEA7H', 8, clip_geom=est_bound, silent=True)
+    print(gdf3.head())
+    # gdf3.to_file('/tmp/grids/est_shape_isea7h_8.shp')
+
+    df1 = grid_stats_table('ISEA7H', 8, clip_geom=est_bound, silent=False)
+    print(df1.head(8))
+
+
 
     
