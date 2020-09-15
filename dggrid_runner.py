@@ -9,6 +9,8 @@ import subprocess
 import json
 import traceback
 import chardet
+import numpy as np
+import pandas as pd
 
 # specify the operation
 dggrid_operations = ( 
@@ -731,8 +733,30 @@ class DGGRIDv7(object):
         elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
             metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
             metafile.append("clip_region_files " + subset_conf['clip_region_files'])
-        elif subset_conf['clip_subset_type'] == 'SEQNUMS':
-            raise ValueError('not yet implemented')
+        elif subset_conf['clip_subset_type'] in [ 'SEQNUMS'] and not subset_conf['clip_region_files'] is None:
+            if not dggs.dggs_type in ['ISEA7H', 'FULLER7H', 'PLANETRISK']:
+                metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
+                metafile.append("clip_region_files " + subset_conf['clip_region_files'])
+            else:
+                # if dggs_aperture_type would be SEQUENCE
+                # have to reset to WHOLE_EARTH and clip based on 
+                # output_first_seqnum and output_last_seqnum 
+                subset_conf['clip_subset_type'] = 'WHOLE_EARTH'
+                metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
+                # loading seqnums
+                files = subset_conf['clip_region_files'].split(' ')
+                seqnums = []
+                for file in files:
+                    seqs = pd.read_csv( file, header=None)[0].values
+                    seqnums.append(seqs.min())
+                    seqnums.append(seqs.max())
+
+                first_seqnum = np.array(seqnums).min()
+                last_seqnum = np.array(seqnums).max()
+                subset_conf['output_first_seqnum'] = first_seqnum
+                metafile.append("output_first_seqnum " + str(subset_conf['output_first_seqnum']))
+                subset_conf['output_last_seqnum'] = last_seqnum
+                metafile.append("output_last_seqnum " + str(subset_conf['output_last_seqnum']))
         else:
             raise ValueError('something is not correct in subset_conf')
         
