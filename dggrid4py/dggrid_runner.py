@@ -6,20 +6,19 @@ import shutil
 import os
 import sys
 import subprocess
-import json
 import traceback
-import chardet
+import tempfile
 import numpy as np
 import pandas as pd
 
-# specify the operation
-dggrid_operations = ( 
-    'GENERATE_GRID',
-    'TRANSFORM_POINTS',
-    'BIN_POINT_VALS',
-    'BIN_POINT_PRESENCE',
-    'OUTPUT_STATS'
- )
+import fiona
+from fiona.crs import from_epsg
+
+import geopandas as gpd
+
+import shapely
+from shapely.geometry import Polygon, box, shape
+
 
 # specify a ISEA3H
 dggs_types = ( 
@@ -40,119 +39,6 @@ dggs_types = (
     'FULLER7H', # FULLER projection with hexagon cells and an aperture of 7
 )
 
-### CUSTOM args
-dggs_orient_specify_types = ( 'SPECIFIED', 'RANDOM', 'REGION_CENTER' )
-
-def specify_orient_type_args(orient_type,
-                            dggs_vert0_lon=11.25,
-                            dggs_vert0_lat=58.28252559,
-                            dggs_vert0_azimuth=0.0,
-                            dggs_orient_rand_seed=42):
-
-    if orient_type == 'SPECIFIED':
-        return {
-            'dggs_vert0_lon' : dggs_vert0_lon,
-            'dggs_vert0_lat' : dggs_vert0_lat,
-            'dggs_vert0_azimuth' : dggs_vert0_azimuth
-        }
-    if orient_type == 'RANDOM':
-        return { 'dggs_orient_rand_seed' : dggs_orient_rand_seed }
-
-    # else default REGION_CENTER
-
-dggs_topologies = ( 'HEXAGON', 'TRIANGLE', 'DIAMOND')
-dggs_aperture_types = ( 'PURE', 'MIXED43', 'SEQUENCE')
-
-def specify_topo_aperture(topology_type, aperture_type, aperture_res, dggs_num_aperture_4_res=0, dggs_aperture_sequence="333333333333"):
-    if not topology_type in dggs_topologies or not aperture_type in dggs_aperture_types:
-        raise ValueError('topology or aperture type unknow')
-
-    if aperture_type == 'PURE':
-        if topology_type == 'HEXAGON':
-            if not aperture_res in [3, 4, 7]:
-                print(f"combo not possible / {topology_type} {aperture_res} / setting 3H")
-                return { '#short_name': "3H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': 3
-                    }
-            else:
-                return { '#short_name': f"{aperture_res}H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': aperture_res
-                    }
-                
-        if topology_type in ['TRIANGLE', 'DIAMOND']:
-            if not aperture_res == 4:
-                print(f"combo not possible / {topology_type} {aperture_res} / setting 4{topology_type[0]}")
-                return { '#short_name': f"4{topology_type[0]}",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': 4
-                    }
-            else:
-                return { '#short_name': f"4{topology_type[0]}",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': aperture_res
-                    }
-
-    elif aperture_type == 'MIXED43':
-        # dggs_aperture is ignored, only HEXAGON can have MIXED34
-        if topology_type == 'HEXAGON':
-            # dggs_num_aperture_4_res (default 0)
-            return { '#short_name': f"43H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_num_aperture_4_res': dggs_num_aperture_4_res,
-                    '#dggs_aperture': aperture_res
-                    }
-        else:
-            raise ValueError('not yet implemented')
-
-    elif aperture_type == "SEQUENCE":
-        # dggs_aperture_sequence (default “333333333333”).
-        return { '#short_name': f"SEQ{topology_type[0]}",
-                'dggs_topology': topology_type,
-                'dggs_aperture_type': aperture_type,
-                'dggs_aperture_sequence': str(dggs_aperture_sequence),
-                '#dggs_aperture': aperture_res
-            }
-
-
-dggs_projections = ( "ISEA", "FULLER")
-dggs_res_specify_types = ( "SPECIFIED", "CELL_AREA", "INTERCELL_DISTANCE" )
-
-def specify_resolution(proj_spec,
-                        dggs_res_spec_type,
-                        dggs_res_spec=9,
-                        dggs_res_specify_area=120000,
-                        dggs_res_specify_intercell_distance=4000,
-                        dggs_res_specify_rnd_down=True):
-    if not proj_spec in list(dggs_projections) or not dggs_res_spec_type in dggs_res_specify_types:
-        raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
-
-    if dggs_res_spec_type == "SPECIFIED":
-        return {
-            'dggs_proj': proj_spec,
-            'dggs_res_specify_type': dggs_res_spec
-        }
-    
-    elif dggs_res_spec_type == 'CELL_AREA':
-        return {
-            'dggs_proj': proj_spec,
-            'dggs_res_specify_area': dggs_res_specify_area, # (in square kilometers)
-            'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
-        }
-    elif dggs_res_spec_type == 'INTERCELL_DISTANCE':
-        return {
-            'dggs_proj': proj_spec,
-            'dggs_res_specify_intercell_distance': dggs_res_specify_intercell_distance, # (in kilometers)
-            'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
-        }
-
-
 # control grid generation
 clip_subset_types = ( 
     'SHAPEFILE',
@@ -161,8 +47,6 @@ clip_subset_types = (
     'AIGEN',
     'SEQNUMS'
 )
-
-
 
 # specify the output
 cell_output_types = ( 
@@ -196,103 +80,28 @@ input_address_types = (
     'AIGEN'  # Arc/Info Generate file format
 )
 
-parameters = (
-    'bin_coverage',
-    'cell_output_control',
-    'cell_output_file_name',
-    'cell_output_gdal_format',
-    'cell_output_type',
-    'children_output_file_name',
-    'children_output_type',
-    'clipper_scale_factor',
-    'clip_region_files',
-    'clip_subset_type',
-    'densification',
-    'dggrid_operation',
-    'dggs_aperture_sequence',
-    'dggs_aperture_type',
-    'dggs_num_aperture_4_res',
-    'dggs_proj',
-    'dggs_res_spec',
-    'dggs_res_specify_area',
-    'dggs_res_specify_rnd_down',
-    'dggs_res_specify_type',
-    'dggs_topology',
-    'dggs_type',
-    'geodetic_densify',
-    'input_address_type',
-    'input_delimiter',
-    'input_file_name',
-    'input_files',
-    'kml_default_color',
-    'kml_default_width',
-    'kml_description',
-    'kml_name',
-    'max_cells_per_output_file',
-    'neighbor_output_file_name',
-    'neighbor_output_type',
-    'output_address_type',
-    'output_count',
-    'output_delimiter',
-    'output_file_name',
-    'point_output_file_name',
-    'point_output_gdal_format',
-    'point_output_type',
-    'precision',
-    'shapefile_id_field_length',
-    'update_frequency',
-    'verbosity'
+### CUSTOM args
+dggs_projections = ( "ISEA", "FULLER")
+
+dggs_topologies = ( 'HEXAGON', 'TRIANGLE', 'DIAMOND')
+dggs_aperture_types = ( 'PURE', 'MIXED43', 'SEQUENCE')
+
+dggs_res_specify_types = ( "SPECIFIED", "CELL_AREA", "INTERCELL_DISTANCE" )
+dggs_orient_specify_types = ( 'SPECIFIED', 'RANDOM', 'REGION_CENTER' )
+
+# specify the operation
+dggrid_operations = ( 
+    'GENERATE_GRID',
+    'TRANSFORM_POINTS',
+    'BIN_POINT_VALS',
+    'BIN_POINT_PRESENCE',
+    'OUTPUT_STATS'
 )
 
-def dgconstruct(dggs_type: str   = "CUSTOM", # dggs_type
-                projection: str   = 'ISEA',  # dggs_projection
-                aperture: int     = 3,  # dggs_aperture_type / dggs_aperture
-                topology: str     = 'HEXAGON', # dggs_topology
-                res: int          = None, # dggs_res_spec
-                precision: int    = 7,
-                area: float         = None, # dggs_res_specify_area
-                spacing: float      = None,
-                cls_val: float          = None, # dggs_res_specify_intercell_distance
-                resround: str     = 'nearest',
-                metric: bool       = True,
-                show_info: bool    = True,
-                azimuth_deg: float  = 0, # dggs_vert0_azimuth
-                pole_lat_deg: float = 58.28252559, # dggs_vert0_lat
-                pole_lon_deg: float = 11.25 # dggs_vert0_lon
-                ):
-    
-    if not len(list(filter(lambda x: not x is None, [res,area,spacing,cls_val])))  == 1:  
-        raise ValueError('dgconstruct(): Only one of res, area, length, or cls can have a value!')
 
-    #Use a dummy resolution, we'll fix it in a moment
-    dggs = Dggs(
-        dggs_type   = dggs_type,
-        pole_lon_deg = pole_lon_deg,
-        pole_lat_deg = pole_lat_deg,
-        azimuth_deg  = azimuth_deg,
-        aperture     = aperture,
-        res          = 1,
-        topology     = topology.upper(),
-        projection   = projection.upper(),
-        precision    = precision
-    )
-
-    if not res is None:
-        dggs.res = res
-    elif not area is None:
-        dggs.res = dggs.dg_closest_res_to_area (area=area, round=resround,metric=metric,show_info=True)
-    elif not spacing is None :
-        dggs.res = dggs.dg_closest_res_to_spacing(spacing=spacing,round=resround,metric=metric,show_info=True)
-    elif not cls_val is None:
-        dggs.res = dggs.dg_closest_res_to_cls ( cls_val=cls_val, round=resround,metric=metric,show_info=True)
-    else:
-        raise ValueError('dgconstruct(): Logic itself has failed us.')
-
-    dggs.dgverify()
-
-    return dggs
-
-
+"""
+helper function to create a DGGS config quickly
+"""
 def dgselect(dggs_type, **kwargs):
 
     dggs = None
@@ -406,7 +215,9 @@ def dgselect(dggs_type, **kwargs):
     return dggs
 
 
-
+"""
+helper function to generate the metafile from a DGGS config
+"""
 def dg_grid_meta(dggs):
 
     dggrid_par_lookup = {
@@ -441,7 +252,9 @@ def dg_grid_meta(dggs):
     return metafile
 
 
-
+"""
+class representing a DGGS grid system configuration, projection aperture etc
+"""
 class Dggs(object):
 
     """
@@ -625,15 +438,22 @@ class Dggs(object):
         raise ValueError('not yet implemented')
 
 
+"""
+necessary instance object that needs to be instantiated once to tell where to use and execute the dggrid cmd tool
+"""
 class DGGRIDv7(object):
 
-    def __init__(self, executable = 'dggrid', working_dir = '.', capture_logs=True, silent=False):
+    def __init__(self, executable = 'dggrid', working_dir = None, capture_logs=True, silent=False):
         self.executable = Path(executable).resolve()
-        self.working_dir = working_dir
-        self.last_run_succesful = False
-        self.last_run_logs = ''
         self.capture_logs=capture_logs
         self.silent=silent
+        self.last_run_succesful = False
+        self.last_run_logs = ''
+
+        if working_dir is None:
+            self.working_dir = tempfile.mkdtemp(prefix='dggrid_')
+        else:
+            self.working_dir = working_dir
 
     
     def is_runnable(self):
@@ -713,7 +533,12 @@ class DGGRIDv7(object):
         return o.returncode
     
 
-    def grid_gen(self, dggs, subset_conf, output_conf):
+    """
+    ##############################################################################################
+    # lower level API
+    ##############################################################################################
+    """
+    def dgapi_grid_gen(self, dggs, subset_conf, output_conf):
         """
         Grid Generation. Generate the cells of a DGG, either covering the complete surface of the earth or covering only a 
         specific set of regions on the earth’s surface.
@@ -801,7 +626,7 @@ class DGGRIDv7(object):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def grid_transform(self, dggs, subset_conf, output_conf):
+    def dgapi_grid_transform(self, dggs, subset_conf, output_conf):
         """
         Address Conversion. Transform a file of locations from one address form (such as longitude/latitude) to another (such as DGG cell indexes).
         """
@@ -843,7 +668,7 @@ class DGGRIDv7(object):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def point_value_binning(self, dggs):
+    def dgapi_point_value_binning(self, dggs):
         """
         Point Value Binning. Bin a set of floating-point values associated with point locations into the cells of a DGG, 
         by assigning to each DGG cell the arithmetic mean of the values which are contained in that cell.
@@ -856,7 +681,7 @@ class DGGRIDv7(object):
         # return None
 
 
-    def pres_binning(self, dggs):
+    def dgapi_pres_binning(self, dggs):
         """
         Presence/Absence Binning. Given a set of input files, each containing point locations associated with a particular class, DGGRID outputs, 
         for each cell of a DGG, a vector indicating whether or not each class is present in that cell.
@@ -869,7 +694,7 @@ class DGGRIDv7(object):
         # return None
 
 
-    def grid_stats(self, dggs):
+    def dgapi_grid_stats(self, dggs):
         """
         Output Grid Statistics. Output a table of grid characteristics for the specified DGG.
         """
@@ -925,3 +750,424 @@ class DGGRIDv7(object):
         else:
             return { 'metafile': metafile, 'output_conf': {'stats_output': table, 'earth_radius_info': earth_radius_info } }
 
+
+    """
+    #################################################################################
+    # Higher level API
+    #################################################################################
+    """
+    def grid_stats_table(self, dggs_type, resolution, mixed_aperture_level=None):
+        """
+        generates the area and cell statististcs for the given DGGS from resolution 0 to the given resolution of the DGGS
+        """
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+
+        dggs_ops = self.dgapi_grid_stats(dggs)
+        df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
+
+        df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
+        df['Resolution'] = df['Resolution'].astype(int)
+        df['Cells'] = df['Cells'].astype(np.int64)
+        return df
+
+
+    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
+        """
+        generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
+            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+            b) if clip_geom is a shapely shape geometry, takes this as a clip area
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        
+        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+
+        if not clip_geom is None and clip_geom.area > 0:
+
+            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=from_epsg(4326))
+            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson", driver='GeoJSON' )
+
+            subset_conf.update({
+                'clip_subset_type': 'GDAL',
+                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson").resolve()),
+                })
+
+        output_conf = {
+            'cell_output_type': 'GDAL',
+            'cell_output_gdal_format' : 'GeoJSON',
+            'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson").resolve())
+            }
+        
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson", driver='GeoJSON' )
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson") )
+            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson") )
+        except Exception:
+            pass
+
+        return gdf
+
+
+    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None):
+        """
+        generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
+            a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids for subsetting
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        
+        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+        seq_df = None
+
+        if not cell_id_list is None and len(cell_id_list) > 0:
+
+            seq_df = pd.DataFrame({ 'seqs': cell_id_list})
+            seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=['seqs'], sep=' ')
+
+            subset_conf.update({
+                'clip_subset_type': 'SEQNUMS',
+                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
+                })
+
+        output_conf = {
+            'cell_output_type': 'GDAL',
+            'cell_output_gdal_format' : 'GeoJSON',
+            'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson").resolve())
+            }
+        
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson", driver='GeoJSON' )
+
+        if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
+            # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
+            # as they are all cell IDs they should all be long integers
+            seq_df['cell_exists'] = True
+            seq_df['seqs'] = seq_df['seqs'].astype(np.int64)
+            seq_df.set_index('seqs', inplace=True)
+            gdf['Name'] = gdf['Name'].astype(np.int64)
+            gdf = gdf.join( seq_df, how='inner', on='Name')
+            gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.geojson") )
+            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
+        except Exception:
+            pass
+
+        return gdf
+
+
+    def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
+        """
+        generates a DGGS grid and returns all the cellids as a pandas dataframe
+            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+            b) if clip_geom is a shapely shape geometry, takes this as a clip area
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        
+        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+
+        if not clip_geom is None and clip_geom.area > 0:
+
+            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=from_epsg(4326))
+            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson", driver='GeoJSON' )
+
+            subset_conf.update({
+                'clip_subset_type': 'GDAL',
+                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson").resolve()),
+                })
+
+        output_conf = {
+            'point_output_type': 'TEXT',
+            'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
+            }
+        
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+
+        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None)
+        df = df.dropna()
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt") )
+            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.geojson") )
+        except Exception:
+            pass
+
+        return df
+
+
+    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None):
+        """
+        takes a geodataframe with point geometry and optional additional value columns and returns:
+            a) if cell_ids_only == True: the same geodataframe with an additional column with the cell ids
+            b) if cell_ids_only == False: a new Geodataframe with geometry type Polygon, with column of cell ids and the additional columns
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+
+        cols = set(geodf_points_wgs84.columns.tolist())
+        cols = cols - set('geometry')
+        geodf_points_wgs84['lon'] = geodf_points_wgs84['geometry'].x
+        geodf_points_wgs84['lat'] = geodf_points_wgs84['geometry'].y
+        cols_ordered = ['lon', 'lat']
+        for col_name in cols:
+            cols_ordered.append(col_name)
+
+        geodf_points_wgs84[cols_ordered].to_csv( str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()) , header=False, index=False, columns=cols_ordered, sep=' ')
+
+        subset_conf = {
+            'input_file_name':  str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()),
+            'input_address_type': 'GEO',
+            'input_delimiter': "\" \""
+            }
+
+        output_conf = {
+            'output_file_name': str( (Path(tmp_dir) / f"seqnums_{tmp_id}.txt").resolve()),
+            'output_address_type': 'SEQNUM',
+            'output_delimiter': "\",\""
+            }
+        
+        dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
+
+        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None)
+        df = df.dropna()
+        cell_id_list = df[0].values
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
+            os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
+        except Exception:
+            pass
+
+        if cell_ids_only == True:
+            geodf_points_wgs84['seqnums'] = cell_id_list
+            return geodf_points_wgs84
+        else:
+            # grid_gen from seqnums
+            gdf = self.grid_cell_polygons_from_cellids(cell_id_list=cell_id_list,
+                                                    dggs_type=dggs_type,
+                                                    resolution=resolution,
+                                                    mixed_aperture_level=mixed_aperture_level)
+            try:
+                for col in cols_ordered:
+                    gdf[col] = geodf_points_wgs84[col].values
+            except Exception:
+                pass
+            return gdf
+
+
+#############################################################
+"""
+below is work in progress on custom DGGS configuration, currently we only barely support the predefined DGGS_TYPES
+"""
+
+parameters = (
+    'bin_coverage',
+    'cell_output_control',
+    'cell_output_file_name',
+    'cell_output_gdal_format',
+    'cell_output_type',
+    'children_output_file_name',
+    'children_output_type',
+    'clipper_scale_factor',
+    'clip_region_files',
+    'clip_subset_type',
+    'densification',
+    'dggrid_operation',
+    'dggs_aperture_sequence',
+    'dggs_aperture_type',
+    'dggs_num_aperture_4_res',
+    'dggs_proj',
+    'dggs_res_spec',
+    'dggs_res_specify_area',
+    'dggs_res_specify_rnd_down',
+    'dggs_res_specify_type',
+    'dggs_topology',
+    'dggs_type',
+    'geodetic_densify',
+    'input_address_type',
+    'input_delimiter',
+    'input_file_name',
+    'input_files',
+    'kml_default_color',
+    'kml_default_width',
+    'kml_description',
+    'kml_name',
+    'max_cells_per_output_file',
+    'neighbor_output_file_name',
+    'neighbor_output_type',
+    'output_address_type',
+    'output_count',
+    'output_delimiter',
+    'output_file_name',
+    'point_output_file_name',
+    'point_output_gdal_format',
+    'point_output_type',
+    'precision',
+    'shapefile_id_field_length',
+    'update_frequency',
+    'verbosity'
+)
+
+def specify_orient_type_args(orient_type,
+                            dggs_vert0_lon=11.25,
+                            dggs_vert0_lat=58.28252559,
+                            dggs_vert0_azimuth=0.0,
+                            dggs_orient_rand_seed=42):
+
+    if orient_type == 'SPECIFIED':
+        return {
+            'dggs_vert0_lon' : dggs_vert0_lon,
+            'dggs_vert0_lat' : dggs_vert0_lat,
+            'dggs_vert0_azimuth' : dggs_vert0_azimuth
+        }
+    if orient_type == 'RANDOM':
+        return { 'dggs_orient_rand_seed' : dggs_orient_rand_seed }
+
+    # else default REGION_CENTER
+
+
+def specify_topo_aperture(topology_type, aperture_type, aperture_res, dggs_num_aperture_4_res=0, dggs_aperture_sequence="333333333333"):
+    if not topology_type in dggs_topologies or not aperture_type in dggs_aperture_types:
+        raise ValueError('topology or aperture type unknow')
+
+    if aperture_type == 'PURE':
+        if topology_type == 'HEXAGON':
+            if not aperture_res in [3, 4, 7]:
+                print(f"combo not possible / {topology_type} {aperture_res} / setting 3H")
+                return { '#short_name': "3H",
+                    'dggs_topology': topology_type,
+                    'dggs_aperture_type': aperture_type,
+                    'dggs_aperture': 3
+                    }
+            else:
+                return { '#short_name': f"{aperture_res}H",
+                    'dggs_topology': topology_type,
+                    'dggs_aperture_type': aperture_type,
+                    'dggs_aperture': aperture_res
+                    }
+                
+        if topology_type in ['TRIANGLE', 'DIAMOND']:
+            if not aperture_res == 4:
+                print(f"combo not possible / {topology_type} {aperture_res} / setting 4{topology_type[0]}")
+                return { '#short_name': f"4{topology_type[0]}",
+                    'dggs_topology': topology_type,
+                    'dggs_aperture_type': aperture_type,
+                    'dggs_aperture': 4
+                    }
+            else:
+                return { '#short_name': f"4{topology_type[0]}",
+                    'dggs_topology': topology_type,
+                    'dggs_aperture_type': aperture_type,
+                    'dggs_aperture': aperture_res
+                    }
+
+    elif aperture_type == 'MIXED43':
+        # dggs_aperture is ignored, only HEXAGON can have MIXED34
+        if topology_type == 'HEXAGON':
+            # dggs_num_aperture_4_res (default 0)
+            return { '#short_name': f"43H",
+                    'dggs_topology': topology_type,
+                    'dggs_aperture_type': aperture_type,
+                    'dggs_num_aperture_4_res': dggs_num_aperture_4_res,
+                    '#dggs_aperture': aperture_res
+                    }
+        else:
+            raise ValueError('not yet implemented')
+
+    elif aperture_type == "SEQUENCE":
+        # dggs_aperture_sequence (default “333333333333”).
+        return { '#short_name': f"SEQ{topology_type[0]}",
+                'dggs_topology': topology_type,
+                'dggs_aperture_type': aperture_type,
+                'dggs_aperture_sequence': str(dggs_aperture_sequence),
+                '#dggs_aperture': aperture_res
+            }
+
+
+def specify_resolution(proj_spec,
+                        dggs_res_spec_type,
+                        dggs_res_spec=9,
+                        dggs_res_specify_area=120000,
+                        dggs_res_specify_intercell_distance=4000,
+                        dggs_res_specify_rnd_down=True):
+    if not proj_spec in list(dggs_projections) or not dggs_res_spec_type in dggs_res_specify_types:
+        raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
+
+    if dggs_res_spec_type == "SPECIFIED":
+        return {
+            'dggs_proj': proj_spec,
+            'dggs_res_specify_type': dggs_res_spec
+        }
+    
+    elif dggs_res_spec_type == 'CELL_AREA':
+        return {
+            'dggs_proj': proj_spec,
+            'dggs_res_specify_area': dggs_res_specify_area, # (in square kilometers)
+            'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
+        }
+    elif dggs_res_spec_type == 'INTERCELL_DISTANCE':
+        return {
+            'dggs_proj': proj_spec,
+            'dggs_res_specify_intercell_distance': dggs_res_specify_intercell_distance, # (in kilometers)
+            'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
+        }
+
+
+def dgconstruct(dggs_type: str   = "CUSTOM", # dggs_type
+                projection: str   = 'ISEA',  # dggs_projection
+                aperture: int     = 3,  # dggs_aperture_type / dggs_aperture
+                topology: str     = 'HEXAGON', # dggs_topology
+                res: int          = None, # dggs_res_spec
+                precision: int    = 7,
+                area: float         = None, # dggs_res_specify_area
+                spacing: float      = None,
+                cls_val: float          = None, # dggs_res_specify_intercell_distance
+                resround: str     = 'nearest',
+                metric: bool       = True,
+                show_info: bool    = True,
+                azimuth_deg: float  = 0, # dggs_vert0_azimuth
+                pole_lat_deg: float = 58.28252559, # dggs_vert0_lat
+                pole_lon_deg: float = 11.25 # dggs_vert0_lon
+                ):
+    
+    if not len(list(filter(lambda x: not x is None, [res,area,spacing,cls_val])))  == 1:  
+        raise ValueError('dgconstruct(): Only one of res, area, length, or cls can have a value!')
+
+    #Use a dummy resolution, we'll fix it in a moment
+    dggs = Dggs(
+        dggs_type   = dggs_type,
+        pole_lon_deg = pole_lon_deg,
+        pole_lat_deg = pole_lat_deg,
+        azimuth_deg  = azimuth_deg,
+        aperture     = aperture,
+        res          = 1,
+        topology     = topology.upper(),
+        projection   = projection.upper(),
+        precision    = precision
+    )
+
+    if not res is None:
+        dggs.res = res
+    elif not area is None:
+        dggs.res = dggs.dg_closest_res_to_area (area=area, round=resround,metric=metric,show_info=True)
+    elif not spacing is None :
+        dggs.res = dggs.dg_closest_res_to_spacing(spacing=spacing,round=resround,metric=metric,show_info=True)
+    elif not cls_val is None:
+        dggs.res = dggs.dg_closest_res_to_cls ( cls_val=cls_val, round=resround,metric=metric,show_info=True)
+    else:
+        raise ValueError('dgconstruct(): Logic itself has failed us.')
+
+    dggs.dgverify()
+
+    return dggs

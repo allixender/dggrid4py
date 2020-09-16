@@ -1,19 +1,22 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
-import uuid
-import shutil
 import os
 import sys
-import subprocess
-import json
-import traceback
-import chardet
+import uuid
+
 import numpy as np
+import pandas as pd
 
-from dggrid_runner import DGGRIDv7, Dggs, dgselect
+import fiona
+from fiona.crs import from_epsg
+import geopandas as gpd
+import shapely
+from shapely.geometry import Polygon, box, shape
 
-    
+from dggrid4py import DGGRIDv7, Dggs, dgselect, dggs_types
+
+
 def example_generate(dggrid_instance):
 
     try:
@@ -41,7 +44,7 @@ def example_generate(dggrid_instance):
         # 'densification' : 5
         }
 
-    dggs_ops = dggrid_instance.grid_gen(dggs, subset_conf, output_conf )
+    dggs_ops = dggrid_instance.dgapi_grid_gen(dggs, subset_conf, output_conf )
 
     return dggs_ops
     
@@ -86,7 +89,7 @@ def example_aigenerate(dggrid_instance, example_src):
         'point_output_file_name': "orPts"
         }
 
-    dggs_ops = dggrid_instance.grid_gen(dggs, subset_conf, output_conf )
+    dggs_ops = dggrid_instance.dgapi_grid_gen(dggs, subset_conf, output_conf )
 
     return dggs_ops
 
@@ -134,7 +137,7 @@ def example_gdal(dggrid_instance, example_src):
         'point_output_file_name': "corvallisPts.geojson"
         }
 
-    dggs_ops = dggrid_instance.grid_gen(dggs, subset_conf, output_conf )
+    dggs_ops = dggrid_instance.dgapi_grid_gen(dggs, subset_conf, output_conf )
 
     return dggs_ops
 
@@ -165,7 +168,7 @@ def generate_defs_1_5(dggrid_instance):
                 # 'densification': 6
                 }
 
-            dggs_ops = dggrid_instance.grid_gen(dggs, subset_conf, output_conf )
+            dggs_ops = dggrid_instance.dgapi_grid_gen(dggs, subset_conf, output_conf )
 
             print(dggs_ops)
 
@@ -183,7 +186,7 @@ def example_table_stats(dggrid_instance):
     """
 
     dggs = dgselect(dggs_type = 'ISEA43H', res= 10, mixed_aperture_level= 5)
-    dggs_ops = dggrid_instance.grid_stats(dggs)
+    dggs_ops = dggrid_instance.dgapi_grid_stats(dggs)
 
     return dggs_ops
 
@@ -222,7 +225,7 @@ def example_transform_geo_to_seqnum(dggrid_instance, example_src):
         'output_delimiter': "\",\""
         }
 
-    dggs_ops = dggrid_instance.grid_transform(dggs, subset_conf, output_conf)
+    dggs_ops = dggrid_instance.dgapi_grid_transform(dggs, subset_conf, output_conf)
 
     return dggs_ops
 
@@ -243,25 +246,25 @@ def example_transform_reverse_seqnum_to_any(dggrid_instance, out_type):
         'output_delimiter': "\" \""
         }
 
-    dggs_ops = dggrid_instance.grid_transform(dggs, subset_conf, output_conf)
+    dggs_ops = dggrid_instance.dgapi_grid_transform(dggs, subset_conf, output_conf)
 
     return dggs_ops
 
 
 if __name__ == '__main__':
 
-    dggrid = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir='/tmp/grids')
+    dggrid = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir='/tmp/grids', capture_logs=True, silent=False)
 
     example_src = Path('../examples')
 
     print( dggrid.is_runnable() == True )
 
     # ------------- GENERATE_GRID
-    # result_info = example_generate(dggrid)
-    # print(result_info)
+    result_info = example_generate(dggrid)
+    print(result_info)
 
-    # result_info = example_aigenerate(dggrid, example_src)
-    # print(result_info)
+    result_info = example_aigenerate(dggrid, example_src)
+    print(result_info)
 
     result_info = example_gdal(dggrid, example_src)
     print(result_info)
@@ -279,19 +282,19 @@ if __name__ == '__main__':
     result_info = example_transform_geo_to_seqnum(dggrid, example_src)
     print(result_info)
 
-    # for out_type in [
-    #         'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
-    #         'Q2DI', # quad number and (i, j) coordinates on that quad
-    #         'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
-    #         'INTERLEAVE', # digit-interleaved form of Q2DI, only supported for parameter output_address_type; only available for hexagonal aperture 3 and 4 grids
-    #         'PLANE', # (x, y) coordinates on unfolded ISEA plane,  only supported for parameter output_address_type;
-    #         'Q2DD', # quad number and (x, y) coordinates on that quad
-    #         'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
-    #         'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
-    #         'AIGEN'
-    #     ]: 
-    #     result_info = example_transform_reverse_seqnum_to_any(dggrid, out_type)
-    #     print(result_info)
+    for out_type in [
+            'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
+            'Q2DI', # quad number and (i, j) coordinates on that quad
+            'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
+            'INTERLEAVE', # digit-interleaved form of Q2DI, only supported for parameter output_address_type; only available for hexagonal aperture 3 and 4 grids
+            'PLANE', # (x, y) coordinates on unfolded ISEA plane,  only supported for parameter output_address_type;
+            'Q2DD', # quad number and (x, y) coordinates on that quad
+            'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
+            'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
+            'AIGEN'
+        ]: 
+        result_info = example_transform_reverse_seqnum_to_any(dggrid, out_type)
+        print(result_info)
 
     
 
