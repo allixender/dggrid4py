@@ -66,8 +66,8 @@ gdf6.to_file('from_seqnums_isea7h_5.shp')
 - get parent_for_cell_id at coarser resolution
 - get children_for_cell_id at finer resolution
 
-- sample raster values into s2 dggs cells
-- sample vector values into s2 dggs cells
+- sample raster values into dggs cells
+- sample vector values into dggs cells
 
 ## Related work:
 
