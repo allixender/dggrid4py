@@ -1,5 +1,8 @@
 # dggrid4py - a Python library to run highlevel functions of DGGRIDv7
 
+[https://pypi.org/project/dggrid4py](https://pypi.org/project/dggrid4py)
+
+GNU AFFERO GENERAL PUBLIC LICENSE
 
 [DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 7.0 was released in September, 2019.
 
