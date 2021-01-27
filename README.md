@@ -80,3 +80,54 @@ Originally insprired by [dggridR](https://github.com/r-barnes/dggridR), Richard 
 
 After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rather due to lack of experience) I found [am2222/pydggrid](https://github.com/am2222/pydggrid) ([on PyPI](https://pypi.org/project/pydggrid/)) which made apparently some initial scaffolding for the transform operation with [pybind11](https://pybind11.readthedocs.io/en/master/) including some sophisticated conda packaging for Windows. This might be worth following up. Interestingly, its todos include "Adding GDAL export Geometry Support" and "Support GridGeneration using DGGRID" which this dggrid4py module supports with integration of GeoPandas.
 
+
+## Bundling for different operating systems
+
+Having to compile DGGRID, especially for Windows is a bit annoying currently.
+
+So experimental cross-platform bundling is done in BinaryBuilder.jl of the Julia Language ecosystem. (TODO add link)
+
+It should be similarly easy in conda, I just haven't gotten to it. And the Julia building ecosystem is surprisingly well developed, supported and comfortable.
+
+- TODO here link to Ygdrasil build pull request
+- TODO using Pkg to install the binary package and explaining the dependency management.
+
+### checking DGGRID7 binary in Julia
+
+```julia
+
+using DGGRID7_jll
+
+if Base.Sys.iswindows()
+    ENV["PATH"] = join( [ENV["PATH"], join(DGGRID7_jll.LIBPATH_list, ";") ],  ";")
+else
+    ENV["LD_LIBRARY_PATH"] = join(DGGRID7_jll.LIBPATH_list, ":")
+end
+
+dggrid_cmd = DGGRID7_jll.get_dggrid_path()
+
+run(`$dggrid_cmd`)
+```
+
+
+### Setting up dggrid_instance in Python without running DGGRID itself in Julia
+
+```Python
+import os
+from julia.api import Julia
+jl = Julia(compiled_modules=False)
+
+jl.eval("using DGGRID7_jll")
+dirs = jl.eval("DGGRID7_jll.LIBPATH_list")
+
+# for Windows path separator is ";" and the variable is PATH
+# for linux the path separator is ":" and the variable is LD_LIBRARY_PATH
+path_update = ";".join(dirs)
+os.environ["PATH"] = ";".join(os.environ["PATH"], path_update)
+
+ dggrid_exec = jl.eval("DGGRID7_jll.get_dggrid_path()")
+ dggrid = DGGRIDv7(executable=dggrid_exec, working_dir=os.curdir, capture_logs=False, silent=False)
+
+ # and take it from here in python
+
+```
