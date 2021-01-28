@@ -129,6 +129,8 @@ This is technically even possible without installing and loading Python/Julia in
 ```Python
 import os
 from julia.api import Julia
+from dggrid4py import DGGRIDv7
+
 jl = Julia(compiled_modules=False)
 
 jl.eval("using DGGRID7_jll")
@@ -137,7 +139,7 @@ dirs = jl.eval("DGGRID7_jll.LIBPATH_list")
 # for Windows path separator is ";" and the variable is PATH
 # for linux the path separator is ":" and the variable is LD_LIBRARY_PATH
 path_update = ";".join(dirs)
-os.environ["PATH"] = ";".join(os.environ["PATH"], path_update)
+os.environ["PATH"] = os.environ["PATH"] + ";" + path_update
 
 dggrid_exec = jl.eval("DGGRID7_jll.get_dggrid_path()")
 dggrid = DGGRIDv7(executable=dggrid_exec, working_dir=os.curdir, capture_logs=False, silent=False)
