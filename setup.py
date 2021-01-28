@@ -1,6 +1,6 @@
 from setuptools import setup, find_packages
 
-VERSION = "0.2.3"
+VERSION = "0.2.4"
 DESCRIPTION = "a Python library to run highlevel functions of DGGRIDv7"
 LONG_DESCRIPTION = "a set of python modules for creating and manipulating Discrete Global Grids with DGGRID version 7.0 software which was created and maintained by Kevin Sahr.  - more info to come!"
 
@@ -13,18 +13,26 @@ setup(
     author_email="<alexander.kmoch@ut.ee>",
     description=DESCRIPTION,
     long_description=LONG_DESCRIPTION,
-    url='https://github.com/allixender/dggrid4py',
-    license='AGPLv3',
+    url="https://github.com/allixender/dggrid4py",
+    license="AGPLv3",
     packages=find_packages(),
     install_requires=[
         "numpy",
         "pandas",
         "fiona",
         "shapely",
-        "geopandas"
+        "geopandas",
     ],  # add any additional packages that
     # needs to be installed along with your package. Eg: 'caer'
-    keywords=["python", "GIS", "DGGS", "DGGRID", "hexagons", "grids", "spatial statistics"],
+    keywords=[
+        "python",
+        "GIS",
+        "DGGS",
+        "DGGRID",
+        "hexagons",
+        "grids",
+        "spatial statistics",
+    ],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Environment :: Console",

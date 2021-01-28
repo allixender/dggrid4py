@@ -85,14 +85,23 @@ After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rat
 
 Having to compile DGGRID, especially for Windows is a bit annoying currently.
 
-So experimental cross-platform bundling is done in BinaryBuilder.jl of the Julia Language ecosystem. (TODO add link)
+So experimental cross-platform bundling is done in [BinaryBuilder.jl](https://github.com/JuliaPackaging/BinaryBuilder.jl) of the [Julia Language](https://julialang.org) ecosystem. ([binarybuilder.org](https://binarybuilder.org/))
 
-It should be similarly easy in conda, I just haven't gotten to it. And the Julia building ecosystem is surprisingly well developed, supported and comfortable.
+It should be similarly easy in `conda`, I just haven't gotten to it. And the Julia building ecosystem is surprisingly well developed, supported and comfortable.
 
-- TODO here link to Ygdrasil build pull request
-- TODO using Pkg to install the binary package and explaining the dependency management.
+- here link to [Yggdrasil build folder](https://github.com/JuliaPackaging/Yggdrasil/tree/master/D/DGGRID7) (Julia Binary Packging community build tree), [pull request](https://github.com/JuliaPackaging/Yggdrasil/pull/2457)
+- using Pkg to install the binary package and explaining the dependency management.
+
+```julia
+import Pkg
+Pkg.add("DGGRID7_jll")
+```
 
 ### checking DGGRID7 binary in Julia
+
+If you have Julia installed and added/installed the DGGRID_jll package and the installation went well including its dependencies, then you can run DGGRID on your computer.
+
+The following short script demonstrates how to find the dggrid executable and how to add necessary library dependency folders to the search path.
 
 ```julia
 
@@ -109,8 +118,13 @@ dggrid_cmd = DGGRID7_jll.get_dggrid_path()
 run(`$dggrid_cmd`)
 ```
 
+Obviously, this is very tedious, and I have not yet gotten to it to make a native Julia port to deal with DGGRID programmatically in Julia.
 
 ### Setting up dggrid_instance in Python without running DGGRID itself in Julia
+
+You can run the installed binary from everywhere. And as this current `dggrid4py` package is obviously a Python library aimed at Python users, here is a short description on how to initialize the dggrid instance for use in dggrid4py. For the convenience you need the [PyJulia](https://github.com/JuliaPy/pyjulia) Python package and [PyCall](http://www.pycall.org/) Julia package.
+
+This is technically even possible without installing and loading Python/Julia interop libraries, if you collect and define the LIB dirs by hand.
 
 ```Python
 import os
@@ -125,9 +139,8 @@ dirs = jl.eval("DGGRID7_jll.LIBPATH_list")
 path_update = ";".join(dirs)
 os.environ["PATH"] = ";".join(os.environ["PATH"], path_update)
 
- dggrid_exec = jl.eval("DGGRID7_jll.get_dggrid_path()")
- dggrid = DGGRIDv7(executable=dggrid_exec, working_dir=os.curdir, capture_logs=False, silent=False)
+dggrid_exec = jl.eval("DGGRID7_jll.get_dggrid_path()")
+dggrid = DGGRIDv7(executable=dggrid_exec, working_dir=os.curdir, capture_logs=False, silent=False)
 
  # and take it from here in python
-
 ```
