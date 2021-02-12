@@ -27,7 +27,7 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     """
 
     est_bound = shapely.geometry.box(20.2,57.00, 28.4,60.0 )
-    
+
     gdf1 = dggrid_instance.grid_cell_polygons_for_extent('ISEA4T', 5, clip_geom=est_bound)
     # print(gdf1.head())
     gdf1.to_file('/tmp/grids/est_shape_isea4t_5.shp')
@@ -88,10 +88,10 @@ def highlevel_grid_stats(dggrid_instance):
         # for mixed aperture eg ISEA34H define the level of switch, see dggrid manual
         if '43' in gridtype:
             mixed_aperture_level = 7
-        
+
         try:
             print(f"{gridtype} - {15}")
-            df = dggrid.grid_stats_table(dggs_type=gridtype, resolution=15, mixed_aperture_level=mixed_aperture_level, )
+            df = dggrid_instance.grid_stats_table(dggs_type=gridtype, resolution=15, mixed_aperture_level=mixed_aperture_level, )
             df.to_csv(f"/tmp/grids/{gridtype}_{15}_stats.csv", index=False)
         except ValueError as ex:
             print(ex)
@@ -111,7 +111,7 @@ if __name__ == '__main__':
 
     - get parent_for_cell_id at coarser resolution
     - get children_for_cell_id at finer resolution
-    
+
     - sample raster values into s2 dggs cells
     - sample vector values into s2 dggs cells
     """
