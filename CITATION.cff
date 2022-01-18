@@ -1,0 +1,9 @@
+cff-version: 1.1.0
+message: "If you use this software, please cite it as below."
+authors:
+  - family-names: Kmoch
+    given-names: Alexander
+    orcid: https://orcid.org/0000-0003-4386-4450
+title: dggrid4py: A set of python modules for creating and manipulating Discrete Global Grids with DGGRID version 7.0
+version: v0.2.3
+date-released: 2017-12-18
