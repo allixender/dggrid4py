@@ -1,6 +1,6 @@
 # dggrid4py - a Python library to run highlevel functions of DGGRIDv7
 
-[https://pypi.org/project/dggrid4py](https://pypi.org/project/dggrid4py)
+[![PyPI version](https://badge.fury.io/py/dggrid4py.svg)](https://badge.fury.io/py/dggrid4py) [![DOI](https://zenodo.org/badge/295495597.svg)](https://zenodo.org/badge/latestdoi/295495597)
 
 [![Population Gridded](day-04-hexa.png)](https://twitter.com/allixender/status/1324055326111485959)
 
