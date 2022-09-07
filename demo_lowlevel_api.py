@@ -1,53 +1,40 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
-import os
-import sys
-import uuid
 
-import numpy as np
 import pandas as pd
 
-import fiona
-from fiona.crs import from_epsg
 import geopandas as gpd
-import shapely
 from shapely.geometry import Polygon, box, shape
 
 from dggrid4py import DGGRIDv7, Dggs, dgselect, dggs_types
 
 
 def example_generate(dggrid_instance):
-
     try:
         dgselect( dggs_type='CUSTOM',
-                projection='ISEA', 
+                projection='ISEA',
                 aperture=3,
                 topology='HEXAGON',
                 res=2)
     except ValueError as ex:
         print(ex)
         pass
-    
     dggs = dgselect(dggs_type = 'ISEA3H',
                 res= 2)
-    
     subset_conf = {
         'clip_subset_type' : 'WHOLE_EARTH',
         # 'update_frequency' : 100000,
         # 'geodetic_densify' : 0.0
         }
-
     output_conf = {
         'cell_output_type' : 'SHAPEFILE',
         'cell_output_file_name' : 'dggrid_isea3h_grid',
         # 'densification' : 5
         }
-
     dggs_ops = dggrid_instance.dgapi_grid_gen(dggs, subset_conf, output_conf )
-
     return dggs_ops
-    
+
 
 def example_aigenerate(dggrid_instance, example_src):
     """
@@ -73,7 +60,7 @@ def example_aigenerate(dggrid_instance, example_src):
     """
 
     dggs = dgselect(dggs_type = 'ISEA3H', res= 6)
-    
+
     subset_conf = {
         'clip_subset_type': 'SHAPEFILE',
         'clip_region_files': str(Path(example_src / "aigenerate/inputfiles/orbuff.shp").resolve()),
@@ -120,7 +107,7 @@ def example_gdal(dggrid_instance, example_src):
     """
 
     dggs = dgselect(dggs_type = 'ISEA7H', res= 9)
-    
+
     subset_conf = {
         'clip_subset_type': 'GDAL',
         'clip_region_files': str(Path(example_src / "gdalExample/inputfiles/corvallis.shp").resolve()),
@@ -143,8 +130,6 @@ def example_gdal(dggrid_instance, example_src):
 
 
 def generate_defs_1_5(dggrid_instance):
-
-    from dggrid_runner import dggs_types
 
     for gridtype in filter(lambda x: x.startswith('CUSTOM') == False, dggs_types):
         for res in range(1,6):
@@ -292,14 +277,6 @@ if __name__ == '__main__':
             'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
             'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
             'AIGEN'
-        ]: 
+        ]:
         result_info = example_transform_reverse_seqnum_to_any(dggrid, out_type)
         print(result_info)
-
-    
-
-
-
-
-
-
