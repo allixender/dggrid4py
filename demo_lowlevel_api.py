@@ -1,13 +1,17 @@
 # -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 - Alexander Kmoch
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# file for details.
+#
+# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
+# Date: 07-12-2022 
+#
 
 from pathlib import Path
-
 import pandas as pd
 
-import geopandas as gpd
-from shapely.geometry import Polygon, box, shape
-
-from dggrid4py import DGGRIDv7, Dggs, dgselect, dggs_types
+from dggrid4py import DGGRIDv7, dgselect, dggs_types
 
 
 def example_generate(dggrid_instance):
@@ -220,7 +224,7 @@ def example_transform_reverse_seqnum_to_any(dggrid_instance, out_type):
     dggs = dgselect(dggs_type = 'ISEA3H', res= 9)
 
     subset_conf = {
-        'input_file_name':  "/tmp/grids/cities3h9.txt",
+        'input_file_name':  str(Path(example_src / "sampleOutput/transform/cities3h9.txt").resolve()),
         'input_address_type': 'SEQNUM',
         'input_delimiter': "\",\""
         }
@@ -238,9 +242,12 @@ def example_transform_reverse_seqnum_to_any(dggrid_instance, out_type):
 
 if __name__ == '__main__':
 
-    dggrid = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir='/tmp/grids', capture_logs=True, silent=False)
+    # DGGRID from https://github.com/sahrk/DGGRID
+    # DGGRID src examples path
+    example_src = Path('./examples')
 
-    example_src = Path('../examples')
+    # with a /tmp dir, e.g. on Linux/Mac
+    dggrid = DGGRIDv7(executable='/usr/local/bin/dggrid', working_dir='/tmp', capture_logs=True, silent=False)
 
     print( dggrid.is_runnable() == True )
 

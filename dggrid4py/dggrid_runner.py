@@ -1,4 +1,12 @@
 # -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 - Alexander Kmoch
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# file for details.
+#
+# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
+# Date: 07-12-2022 
+#
 
 from pathlib import Path
 import uuid
@@ -12,12 +20,9 @@ import numpy as np
 import pandas as pd
 
 import fiona
-from fiona.crs import from_epsg
 
 import geopandas as gpd
-
-import shapely
-from shapely.geometry import Polygon, box, shape
+from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
 fiona_drivers = fiona.supported_drivers
 
@@ -846,6 +851,25 @@ class DGGRIDv7(object):
             return { 'metafile': metafile, 'output_conf': {'stats_output': table, 'earth_radius_info': earth_radius_info } }
 
 
+    def post_process_split_dateline(self, gdf):
+        cellsNew = gdf.iloc[:0].copy()
+        # if we get eventually binning working we will have dynamic additional column for the binned values
+        # cols = dict({ (idx, field) for idx, field in enumerate(gdf.columns)})
+
+        for row in gdf.itertuples():
+            poly = row.geometry
+            coords = get_geom_coords(poly)
+
+            if crosses_interruption(coords):
+                geoms = interrupt_cell(coords)
+
+                for geom in geoms:
+                    cellsNew.loc[len(cellsNew)] = [row.name, geom]
+            else:
+                cellsNew.loc[len(cellsNew)] = [row.name, poly]
+
+        return cellsNew
+
     """
     #################################################################################
     # Higher level API
@@ -866,7 +890,7 @@ class DGGRIDv7(object):
         return df
 
 
-    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
+    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False):
         """
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
@@ -880,7 +904,7 @@ class DGGRIDv7(object):
 
         if not clip_geom is None and clip_geom.area > 0:
 
-            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=from_epsg(4326))
+            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
             clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
             subset_conf.update({
@@ -904,10 +928,12 @@ class DGGRIDv7(object):
         except Exception:
             pass
 
+        if split_dateline == True:
+            return self.post_process_split_dateline(gdf)
         return gdf
 
 
-    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None):
+    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
@@ -957,6 +983,8 @@ class DGGRIDv7(object):
         except Exception:
             pass
 
+        if split_dateline == True:
+            return self.post_process_split_dateline(gdf)
         return gdf
 
 
@@ -974,7 +1002,7 @@ class DGGRIDv7(object):
 
         if not clip_geom is None and clip_geom.area > 0:
 
-            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=from_epsg(4326))
+            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
             clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
             subset_conf.update({
@@ -1001,7 +1029,7 @@ class DGGRIDv7(object):
         return df
 
 
-    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None):
+    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
         takes a geodataframe with point geometry and optional additional value columns and returns:
             a) if cell_ids_only == True: the same geodataframe with an additional column with the cell ids
@@ -1059,6 +1087,8 @@ class DGGRIDv7(object):
                     gdf[col] = geodf_points_wgs84[col].values
             except Exception:
                 pass
+            if split_dateline == True:
+                return self.post_process_split_dateline(gdf)
             return gdf
 
 

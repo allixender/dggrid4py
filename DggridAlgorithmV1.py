@@ -1,12 +1,19 @@
 # -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 - Alexander Kmoch
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# file for details.
+#
+# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
+# Date: 07-12-2022 
+#
 
 """
 ***************************************************************************
 *                                                                         *
 *   This program is free software; you can redistribute it and/or modify  *
-*   it under the terms of the GNU General Public License as published by  *
-*   the Free Software Foundation; either version 2 of the License, or     *
-*   (at your option) any later version.                                   *
+*   it under the terms of the GNU AFFERO General Public License  by       *
+*   the Free Software Foundation;                                         *
 *                                                                         *
 ***************************************************************************
 """
@@ -477,32 +484,12 @@ class DggridGridGenAlgorithmV1(QgsProcessingAlgorithm):
                 self.INPUT_DGGRID_EXECUTABLE,
                 self.tr("location of DGGRID executable program"),
                 optional=False,
-                defaultValue="C:\\Users\\Alexander\\.julia\\artifacts\\3623dbc61425e9c70e82ed04a4a00af546c1495e\\bin\\dggrid.exe",
+                defaultValue="dggrid.exe",
             )
         )
 
         # INPUT_DGGRID_EXECUTABLE_LIBDIRS
-        julia_dirs_alex = [
-            "C:\\Users\\Alexander\\.julia\\artifacts\\c7ce76fefe6ce8001d5e745e8faaa47ba4228852\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\5ea43503c7796016c3a937d84b6bcf91b1bb608f\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\584ac54e52794a22f516f08a1ca655a7f49e5cae\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\c4c27acf31ad9b69c67a5d1d44910b603936c42a\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\58603237680e9ea3493b336d902e50a332fa1aef\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\d89c49a1ed52a2a6d7c516643590932437d7cbb0\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\a5355b4efc1953f6d15e22618ff5dabbbd0f84dd\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\f70a0c7c2917e5bde1419ffe4fba6e3f5fe78324\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\bdeeb133a67a52079b5206e7f9f3a7cbdf357969\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\00802f9a8a7cef0aa5751ca363507c3fc07de490\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\0b827c9d6fcb7b9f25ede8cf20fcbcab2a497200\\bin",
-            "C:\\dev\\Julia_1.5.3\\bin",
-            "C:\\dev\\Julia_1.5.3\\bin\\..\\lib\\julia",
-            "C:\\dev\\Julia_1.5.3\\bin\\..\\lib",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\5c823a847569d0789a68f65aba8aa78b34d4ca3f\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\0407eb942f4c6c53c9bcc1eeccf3def7b46d6cc7\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\0a6628bc2215b9593589daa09bd637c50febfa05\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\42704833bfa671ef47841f64b568a87b9cb25668\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\3f1b12feb59c5ba75346ce47d9ccc46a614c1ca4\\bin",
-            "C:\\Users\\Alexander\\.julia\\artifacts\\0f0553e3bdc0535ac962f8b46e21a88536ee2c24\\bin",
+        additional_lib_dirs = [
         ]
 
         self.addParameter(
@@ -511,7 +498,7 @@ class DggridGridGenAlgorithmV1(QgsProcessingAlgorithm):
                 self.tr("additional temporary PATH/LD_LIBRARY_PATH config for DGGRID"),
                 optional=True,
                 multiLine=True,
-                defaultValue=";".join(julia_dirs_alex),
+                defaultValue=";".join(additional_lib_dirs),
             )
         )
 
@@ -986,7 +973,6 @@ class DggridGridGenAlgorithmV1(QgsProcessingAlgorithm):
     def driver_from_extension(self, path):
         """
         Attempt to auto-detect driver based on the extension.
-        Parameters
         ----------
         path: str or pathlike object
             The path to the dataset to write with.

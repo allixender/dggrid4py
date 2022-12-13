@@ -1,20 +1,18 @@
 # -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 - Alexander Kmoch
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# file for details.
+#
+# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
+# Date: 07-12-2022 
+#
 
-from pathlib import Path
-import os
-import sys
-import uuid
-
-import numpy as np
-import pandas as pd
-
-import fiona
-from fiona.crs import from_epsg
 import geopandas as gpd
 import shapely
-from shapely.geometry import Polygon, box, shape
 
-from dggrid4py import DGGRIDv7, Dggs, dgselect, dggs_types
+import dggrid4py
+from dggrid4py import DGGRIDv7, dggs_types
 
 
 def highlevel_grid_gen_and_transform(dggrid_instance):
@@ -30,31 +28,31 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
 
     gdf1 = dggrid_instance.grid_cell_polygons_for_extent('ISEA4T', 5, clip_geom=est_bound)
     # print(gdf1.head())
-    gdf1.to_file('/tmp/grids/est_shape_isea4t_5.shp')
+    gdf1.to_file('/tmp/est_shape_isea4t_5.shp')
 
     gdf2 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 5, clip_geom=est_bound)
     # print(gdf2.head())
-    gdf2.to_file('/tmp/grids/est_shape_isea7h_5.shp')
+    gdf2.to_file('/tmp/est_shape_isea7h_5.shp')
 
     gdf2_a = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 6, clip_geom=est_bound)
     # print(gdf2_a.head())
-    gdf2_a.to_file('/tmp/grids/est_shape_isea7h_6.shp')
+    gdf2_a.to_file('/tmp/est_shape_isea7h_6.shp')
 
     gdf3 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 8, clip_geom=est_bound)
     # print(gdf3.head())
-    gdf3.to_file('/tmp/grids/est_shape_isea7h_8.shp')
+    gdf3.to_file('/tmp/est_shape_isea7h_8.shp')
 
     gdf3_a = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 9, clip_geom=est_bound)
     # print(gdf3.head())
-    gdf3_a.to_file('/tmp/grids/est_shape_isea7h_9.shp')
+    gdf3_a.to_file('/tmp/est_shape_isea7h_9.shp')
 
     df1 = dggrid_instance.grid_stats_table('ISEA7H', 8)
     # print(df1.head(8))
-    df1.to_csv('/tmp/grids/eisea7h_8_stats.csv', index=False)
+    df1.to_csv('/tmp/eisea7h_8_stats.csv', index=False)
 
     df2 = dggrid_instance.grid_cellids_for_extent('ISEA7H', 5, clip_geom=est_bound)
     # print(df2)
-    df2.to_csv('/tmp/grids/est_isea7h_5_gridgen_from_seqnums.csv', index=False, header=None)
+    df2.to_csv('/tmp/est_isea7h_5_gridgen_from_seqnums.csv', index=False, header=None)
 
     cell_list_est = df2[0].values
     # # print(cell_list_est)
@@ -62,21 +60,25 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
 
     gdf4 = dggrid_instance.grid_cell_polygons_from_cellids(cell_list_est, 'ISEA7H', 5)
     # print(gdf4.head())
-    gdf4.to_file('/tmp/grids/from_seqnums_isea7h_5.shp')
+    gdf4.to_file('/tmp/from_seqnums_isea7h_5.shp')
 
     gdf4['centroid_geo'] = gdf4['geometry'].centroid
 
     tgeo = gdf4.copy()
     tgeo = tgeo.rename(columns={'geometry': 'old_geo', 'centroid_geo': 'geometry' }).drop(columns=['old_geo'])
-    geodf_points_wgs84 = gpd.GeoDataFrame(tgeo, geometry='geometry', crs=from_epsg(4326))
+    geodf_points_wgs84 = gpd.GeoDataFrame(tgeo, geometry='geometry', crs=4326)
 
     gdf5 = dggrid_instance.cells_for_geo_points(geodf_points_wgs84, False, 'ISEA7H', 5)
     print(gdf5.head())
-    gdf5.to_file('/tmp/grids/polycells_from_points_isea7h_5.shp')
+    gdf5.to_file('/tmp/polycells_from_points_isea7h_5.shp')
 
     gdf6 = dggrid_instance.cells_for_geo_points(geodf_points_wgs84, True, 'ISEA7H', 5)
     print(gdf6.head())
-    gdf6.to_file('/tmp/grids/geopoint_cellids_from_points_isea7h_5.shp')
+    gdf6.to_file('/tmp/geopoint_cellids_from_points_isea7h_5.shp')
+
+    # v0.2.6 API update split at dateline for cartesian GIS tools
+    gdf7 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 3, split_dateline=True)
+    gdf7.to_file('/tmp/global_isea7h_3_interrupted.shp')
 
 
 def highlevel_grid_stats(dggrid_instance):
@@ -92,7 +94,7 @@ def highlevel_grid_stats(dggrid_instance):
         try:
             print(f"{gridtype} - {15}")
             df = dggrid_instance.grid_stats_table(dggs_type=gridtype, resolution=15, mixed_aperture_level=mixed_aperture_level, )
-            df.to_csv(f"/tmp/grids/{gridtype}_{15}_stats.csv", index=False)
+            df.to_csv(f"/tmp/{gridtype}_{15}_stats.csv", index=False)
         except ValueError as ex:
             print(ex)
             pass
@@ -100,7 +102,11 @@ def highlevel_grid_stats(dggrid_instance):
 
 if __name__ == '__main__':
 
-    dggrid = DGGRIDv7(executable='../src/apps/dggrid/dggrid', working_dir='/tmp/grids', capture_logs=False, silent=False)
+    print(dggrid4py.__version__)
+
+    # DGGRID from https://github.com/sahrk/DGGRID
+    # with a /tmp dir, e.g. on Linux/Mac
+    dggrid = DGGRIDv7(executable='/usr/local/bin/dggrid', working_dir='/tmp', capture_logs=True, silent=False)
 
     highlevel_grid_gen_and_transform(dggrid)
 

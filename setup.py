@@ -1,6 +1,15 @@
+# -*- coding: utf-8 -*-
+#
+# Copyright (c) 2022 - Alexander Kmoch
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# file for details.
+#
+# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
+# Date: 07-12-2022 
+#
 from setuptools import setup, find_packages
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 
 VERSION = __version__
 DESCRIPTION = "a Python library to run highlevel functions of DGGRIDv7"
