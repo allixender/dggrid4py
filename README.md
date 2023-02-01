@@ -91,4 +91,4 @@ Having to compile DGGRID for Windows can be a bit challenging. We are working on
 
 ## greater context DGGS in Earth Sciences and GIS
 
-Some reading to be excited abount: [discourse.pangeo.io](https://discourse.pangeo.io/t/discrete-global-grid-systems-dggs-use-with-pangeo/2274)
+Some reading to be excited about: [discourse.pangeo.io](https://discourse.pangeo.io/t/discrete-global-grid-systems-dggs-use-with-pangeo/2274)
