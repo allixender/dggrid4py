@@ -459,13 +459,14 @@ necessary instance object that needs to be instantiated once to tell where to us
 """
 class DGGRIDv7(object):
 
-    def __init__(self, executable = 'dggrid', working_dir = None, capture_logs=True, silent=False, tmp_geo_out_legacy= True):
+    def __init__(self, executable = 'dggrid', working_dir = None, capture_logs=True, silent=False, tmp_geo_out_legacy=True, has_gdal=True):
         self.executable = Path(executable).resolve()
         self.capture_logs=capture_logs
         self.silent=silent
         self.last_run_succesful = False
         self.last_run_logs = ''
         self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy)
+        self.has_gdal = has_gdal
 
         if working_dir is None:
             self.working_dir = tempfile.mkdtemp(prefix='dggrid_')
@@ -576,7 +577,7 @@ class DGGRIDv7(object):
             metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
             metafile.append("clip_region_files " + subset_conf['clip_region_files'])
         elif subset_conf['clip_subset_type'] in [ 'SEQNUMS'] and not subset_conf['clip_region_files'] is None:
-            if not dggs.dggs_type in ['ISEA7H', 'FULLER7H', 'PLANETRISK']:
+            if not dggs.dggs_type in ['PLANETRISK']:
                 metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                 metafile.append("clip_region_files " + subset_conf['clip_region_files'])
             else:

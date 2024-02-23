@@ -9,10 +9,10 @@
 #
 from setuptools import setup, find_packages
 
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 
 VERSION = __version__
-DESCRIPTION = "a Python library to run highlevel functions of DGGRIDv7"
+DESCRIPTION = "a Python library to run highlevel functions of DGGRIDv7 and v8"
 LONG_DESCRIPTION = "a set of python modules for creating and manipulating Discrete Global Grids with DGGRID version 7.x software which was created and maintained by Kevin Sahr.  - more info to come!"
 
 
