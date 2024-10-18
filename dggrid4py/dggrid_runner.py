@@ -1161,8 +1161,9 @@ class DGGRIDv7(object):
         cell_id_list = df[0].values
 
         try:
-            os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
-            os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
+            # os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
+            # os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
+            shutil.rmtree(str(Path(tmp_dir)))
         except Exception:
             pass
 
