@@ -29,8 +29,15 @@ pandas = "^1.3"
 fiona = "^1.8"
 shapely = "^1.7"
 geopandas = "^0.9"
+
+[tool.poetry.group.test.dependencies]
+pytest = "*"
+
+[tool.poetry.group.docs.dependencies]
 sphinx = "7.1.2"
 sphinx-rtd-theme = "1.3.0rc1"
+myst-parser = "2"
+
 
 
 [build-system]

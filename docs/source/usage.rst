@@ -74,8 +74,10 @@ comfortable geopython libraries, like shapely and geopandas
    gdf7 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 3, split_dateline=True)
    gdf7.to_file('global_isea7h_3_interrupted.shp')
 
-TODO:
------
+TODO
+----
+
+Contributions are welcome:
 
 -  sample vector values into dggs cells (aka binning)
 

@@ -9,12 +9,12 @@ GNU AFFERO GENERAL PUBLIC LICENSE
 
 `DGGRID <https://www.discreteglobalgrids.org/software/>`__ is a free
 software program for creating and manipulating Discrete Global Grids
-created and maintained by Kevin Sahr. DGGRID version 7.0 was released in
-September, 2019.
+created and maintained by Kevin Sahr. DGGRID version 8.1b was released 12. January 2024
 
--  `DGGRID Version 7.5 on GitHub <https://github.com/sahrk/DGGRID>`__
+-  `DGGRID Version 8.1b on GitHub <https://github.com/sahrk/DGGRID>`__
 -  `DGGRID User
-   Manual <https://raw.githubusercontent.com/sahrk/DGGRID/b61b1d93553c76fc0060f22ed4f903fa2e6789ec/dggridManualV75.pdf>`__
+   Manual <https://github.com/sahrk/DGGRID/blob/d08e10d761f7bedd72a253ab1057458f339de51e/dggridManualV81b.pdf>`__
+
 
 Contents
 --------
@@ -48,7 +48,12 @@ Bundling for different operating systems
 ----------------------------------------
 
 Having to compile DGGRID for Windows can be a bit challenging. We are
-working on a conda package.
+working on an updated conda package. Currently DGGRID v7.8 is available on conda-forge:
+
+.. image:: https://anaconda.org/conda-forge/dggrid/badges/version.svg
+   :target: https://anaconda.org/conda-forge/dggrid
+   :alt: Latest version on conda-forge
+
 
 greater context DGGS in Earth Sciences and GIS
 ----------------------------------------------
