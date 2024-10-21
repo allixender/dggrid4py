@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "dggrid4py"
+version = "0.2.7"
+description = "a Python library to run highlevel functions of DGGRIDv7 and v8"
+authors = ["Alexander Kmoch <alexander.kmoch@ut.ee>"]
+license = "AGPL-3.0-or-later"
+readme = "README.md"
+repository = "https://github.com/allixender/dggrid4py"
+homepage = "https://github.com/allixender/dggrid4py"
+keywords = ["python", "GIS", "DGGS", "DGGRID", "hexagons", "grids", "spatial statistics"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Education",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+  "Programming Language :: Python :: 3",
+  "Operating System :: MacOS :: MacOS X",
+  "Operating System :: POSIX",
+  "Operating System :: Unix",
+  "Operating System :: POSIX :: Linux",
+  "Topic :: Scientific/Engineering :: GIS"
+]
+
+[tool.poetry.dependencies]
+python = "^3.8"
+numpy = "^1.21"
+pandas = "^1.3"
+fiona = "^1.8"
+shapely = "^1.7"
+geopandas = "^0.9"
+sphinx = "7.1.2"
+sphinx-rtd-theme = "1.3.0rc1"
+
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
