@@ -5,7 +5,10 @@ API
 - dggrid4py.dggrid_runner
 - dggrid4py.interrupt
 
-.. automodule:: dggrid4py.dggrid_runner
-    :members:
-    :undoc-members:
-    :noindex:
+
+.. toctree::
+   :hidden:
+   :maxdepth: 2
+   :glob:
+
+   dggrid4py/*
