@@ -6,4 +6,5 @@ pandas==1.5
 fiona==1.10
 shapely==1.8
 geopandas==0.9
+dggrid4py==0.2.7
 
