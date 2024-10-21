@@ -3,7 +3,7 @@
 # -- Project information
 
 project = 'dggrid4py'
-copyright = '2024, Graziella'
+copyright = '2024, Alexander Kmoch'
 author = "Alexander Kmoch"
 
 release = '0.2.7'

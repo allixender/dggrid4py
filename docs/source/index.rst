@@ -65,8 +65,8 @@ how to :ref:`installation` the project.
    This project is under active development.
 
 
-.. |DOI| image:: docs/source/zenodo.svg
+.. |DOI| image:: zenodo.svg
    :target: https://zenodo.org/badge/latestdoi/295495597
-.. |Population Gridded| image:: docs/source/day-04-hexa.png
+.. |Population Gridded| image:: day-04-hexa.png
    :target: https://twitter.com/allixender/status/1324055326111485959
 

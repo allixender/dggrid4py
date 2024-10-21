@@ -79,3 +79,4 @@ venv/
 wheels/
 
 poetry.lock
+docs/source/generated/
