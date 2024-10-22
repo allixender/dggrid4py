@@ -965,8 +965,9 @@ class DGGRIDv7(object):
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
         try:
-            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            # os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            # os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            shutil.rmtree(str(Path(tmp_dir)))
         except Exception:
             pass
 
@@ -1073,9 +1074,9 @@ class DGGRIDv7(object):
             gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         try:
-            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
-            # shutil.rmtree(str(Path(tmp_dir)))
+            # os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            # os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
+            shutil.rmtree(str(Path(tmp_dir)))
         except Exception:
             pass
 
@@ -1160,9 +1161,9 @@ class DGGRIDv7(object):
         cell_id_list = df[0].values
 
         try:
-            os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
-            os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
-            # shutil.rmtree(str(Path(tmp_dir)))
+            # os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
+            # os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
+            shutil.rmtree(str(Path(tmp_dir)))
         except Exception:
             pass
 
