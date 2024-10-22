@@ -1,5 +1,0 @@
-numpy
-pandas
-fiona
-shapely
-geopandas

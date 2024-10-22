@@ -1,16 +1,15 @@
-# dggrid4py - a Python library to run highlevel functions of DGGRIDv7
+# dggrid4py - a Python library to run highlevel functions of DGGRID
 
-[![PyPI version](https://badge.fury.io/py/dggrid4py.svg)](https://badge.fury.io/py/dggrid4py) [![DOI](https://zenodo.org/badge/295495597.svg)](https://zenodo.org/badge/latestdoi/295495597)
+[![PyPI version](https://badge.fury.io/py/dggrid4py.svg)](https://badge.fury.io/py/dggrid4py) [![DOI](https://zenodo.org/badge/295495597.svg)](https://zenodo.org/badge/latestdoi/295495597) [![Documentation Status](https://readthedocs.org/projects/dggrid4py/badge/?version=latest)](https://dggrid4py.readthedocs.io/en/latest/?badge=latest)
 
 [![Population Gridded](day-04-hexa.png)](https://twitter.com/allixender/status/1324055326111485959)
 
 GNU AFFERO GENERAL PUBLIC LICENSE
 
-[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 7.0 was released in September, 2019.
+[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.1b was released 12. January 2024
 
-- [DGGRID Version 7.5 on GitHub](https://github.com/sahrk/DGGRID)
-- [DGGRID User Manual](https://raw.githubusercontent.com/sahrk/DGGRID/b61b1d93553c76fc0060f22ed4f903fa2e6789ec/dggridManualV75.pdf)
-
+- [DGGRID Version 8.1b on GitHub](https://github.com/sahrk/DGGRID)
+- [DGGRID User Manual](https://github.com/sahrk/DGGRID/blob/d08e10d761f7bedd72a253ab1057458f339de51e/dggridManualV81b.pdf)
 
 You need the ddgrid tool compiled available on the system.
 
@@ -87,8 +86,12 @@ After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rat
 
 ## Bundling for different operating systems
 
-Having to compile DGGRID for Windows can be a bit challenging. We are working on a conda package.
+Having to compile DGGRID for Windows can be a bit challenging. We are
+working on an updated conda package. Currently DGGRID v7.8 is available on conda-forge:
+
+[![Latest version on conda-forge](https://anaconda.org/conda-forge/dggrid/badges/version.svg)](https://anaconda.org/conda-forge/dggrid)
 
 ## greater context DGGS in Earth Sciences and GIS
 
 Some reading to be excited about: [discourse.pangeo.io](https://discourse.pangeo.io/t/discrete-global-grid-systems-dggs-use-with-pangeo/2274)
+
