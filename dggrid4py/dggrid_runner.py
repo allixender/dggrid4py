@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 #
 # Copyright (c) 2022 - Alexander Kmoch
-# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
+# Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE
 # file for details.
 #
 # Author: Alexander Kmoch (alexander.kmoch@ut.ee)
-# Date: 07-12-2022 
+# Date: 07-12-2022
 #
 
 from pathlib import Path
@@ -890,7 +890,6 @@ class DGGRIDv7(object):
         df['Cells'] = df['Cells'].astype(np.int64)
         return df
 
-
     def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False):
         """
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
@@ -933,6 +932,48 @@ class DGGRIDv7(object):
             return self.post_process_split_dateline(gdf)
         return gdf
 
+    def grid_centerpoint_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False):
+        """
+        generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
+            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+            b) if clip_geom is a shapely shape geometry, takes this as a clip area
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+
+        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+
+        if not clip_geom is None and clip_geom.area > 0:
+
+            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
+            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+
+            subset_conf.update({
+                'clip_subset_type': 'GDAL',
+                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
+                })
+
+        output_conf = {
+            'point_output_type': 'GDAL',
+            'point_output_gdal_format' : self.tmp_geo_out['driver'],
+            'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
+            }
+
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            os.remove( str( Path(tmp_dir) / f"cells.gen") )
+        except Exception:
+            pass
+
+        if split_dateline == True:
+            return self.post_process_split_dateline(gdf)
+        return gdf
 
     def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
@@ -988,6 +1029,58 @@ class DGGRIDv7(object):
             return self.post_process_split_dateline(gdf)
         return gdf
 
+    def grid_centerpoint_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None):
+        """
+        generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
+            a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids for subsetting
+        """
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+
+        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+        seq_df = None
+
+        if not cell_id_list is None and len(cell_id_list) > 0:
+
+            seq_df = pd.DataFrame({ 'seqs': cell_id_list})
+            seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=['seqs'], sep=' ')
+
+            subset_conf.update({
+                'clip_subset_type': 'SEQNUMS',
+                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
+                })
+
+        output_conf = {
+            'point_output_type': 'GDAL',
+            'point_output_gdal_format' : self.tmp_geo_out['driver'],
+            'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
+            }
+
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+
+        if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
+            # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
+            # as they are all cell IDs they should all be long integers
+            seq_df['cell_exists'] = True
+            seq_df['seqs'] = seq_df['seqs'].astype(np.int64)
+            seq_df.set_index('seqs', inplace=True)
+            name_col = 'name' if 'name' in gdf.columns else 'Name'
+            gdf[name_col] = gdf[name_col].astype(np.int64)
+            gdf = gdf.join( seq_df, how='inner', on=name_col)
+            gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
+
+        try:
+            os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
+            os.remove( str( Path(tmp_dir) / f"cells.gen") )
+        except Exception:
+            pass
+
+        return gdf
 
     def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
         """
@@ -1028,7 +1121,6 @@ class DGGRIDv7(object):
             pass
 
         return df
-
 
     def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
