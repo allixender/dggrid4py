@@ -79,4 +79,9 @@ venv/
 wheels/
 
 poetry.lock
+
+tests/metafile_*
+tests/dggrid_*
+
 docs/source/generated/
+test_script.py

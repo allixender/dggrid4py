@@ -26,14 +26,25 @@ from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
 fiona_drivers = fiona.supported_drivers
 
-def get_geo_out(legacy=True):
-    if legacy is True:
+def get_geo_out(legacy=True, has_gdal=True):
+    if legacy is True and has_gdal is False:
         return { "driver": "GeoJSON", "ext": "geojson"}
 
-    if "FlatGeobuf" in fiona_drivers.keys() and "w" in fiona_drivers["FlatGeobuf"]:
-        return { "driver": "FlatGeobuf", "ext": "fgb"}
+    # TODO in future would be great to have GeoArrow without GDAL
+    if legacy is False and has_gdal is False:
+        return { "driver": "GeoJSON", "ext": "geojson"}
 
-    return { "driver": "GPKG", "ext": "gpgk"}
+    if legacy is True and has_gdal is True:
+        return { "driver": "GeoJSON", "ext": "geojson"}
+
+    if legacy is False and has_gdal is True:
+        if "FlatGeobuf" in fiona_drivers.keys() and "w" in fiona_drivers["FlatGeobuf"]:
+            return { "driver": "FlatGeobuf", "ext": "fgb"}
+
+        return { "driver": "GPKG", "ext": "gpgk"}
+
+    # Failsafe
+    return { "driver": "GeoJSON", "ext": "geojson"}
 
 
 # specify a ISEA3H
@@ -61,7 +72,8 @@ clip_subset_types = (
     'WHOLE_EARTH',
     'GDAL',
     'AIGEN',
-    'SEQNUMS'
+    'SEQNUMS',
+    'COARSE_CELLS'
 )
 
 # specify the output
@@ -83,7 +95,12 @@ output_address_types = (
     'Q2DD', # quad number and (x, y) coordinates on that quad
     'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
     'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
-    'AIGEN'  # Arc/Info Generate file format
+    'AIGEN',  # Arc/Info Generate file format
+    'Z3',
+    'Z3_STR',
+    'Z7',
+    'Z7_STRING',
+    'ZORDER'
 )
 
 input_address_types = (
@@ -93,7 +110,12 @@ input_address_types = (
     'Q2DD', # quad number and (x, y) coordinates on that quad
     'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
     'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
-    'AIGEN'  # Arc/Info Generate file format
+    'AIGEN',  # Arc/Info Generate file format
+    'Z3',
+    'Z3_STR',
+    'Z7',
+    'Z7_STRING',
+    'ZORDER'
 )
 
 ### CUSTOM args
@@ -459,7 +481,13 @@ necessary instance object that needs to be instantiated once to tell where to us
 """
 class DGGRIDv7(object):
 
-    def __init__(self, executable = 'dggrid', working_dir = None, capture_logs=True, silent=False, tmp_geo_out_legacy=True, has_gdal=True):
+    def __init__(self, executable = 'dggrid',
+                 working_dir = None,
+                 capture_logs=True,
+                 silent=False,
+                 tmp_geo_out_legacy=False,
+                 has_gdal=True,
+                 debug=False):
         self.executable = Path(executable).resolve()
         self.capture_logs=capture_logs
         self.silent=silent
@@ -467,11 +495,22 @@ class DGGRIDv7(object):
         self.last_run_logs = ''
         self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy)
         self.has_gdal = has_gdal
+        self.debug = debug
 
         if working_dir is None:
             self.working_dir = tempfile.mkdtemp(prefix='dggrid_')
         else:
             self.working_dir = working_dir
+
+
+    def check_gdal_support(self):
+        if self.has_gdal:
+            print(f"GDAL types should be possible: has GDAL={self.has_gdal}")
+            print("check your dggrid binary | mac: otool -L | Linux ldd ")
+            print(fiona_drivers)
+
+        else:
+            print(f"GDAL types should not be used: has GDAL={self.has_gdal}")
 
 
     def is_runnable(self):
@@ -513,6 +552,9 @@ class DGGRIDv7(object):
             with open('metafile_' + str(tmp_id), 'w', encoding='utf-8') as metafile:
                 for line in dggs_meta_ops:
                     metafile.write(line + '\n')
+
+            if self.debug is True:
+                print(dggs_meta_ops)
 
             logs = []
             o = subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -842,7 +884,7 @@ class DGGRIDv7(object):
                 table.append(line.strip().replace(',',''))
 
         # set capture logs back to original
-        self.capture_logs == save_state
+        self.capture_logs = save_state
 
         if np_table_switch == True:
             np_table = np.genfromtxt(table, skip_header=3)
@@ -883,6 +925,9 @@ class DGGRIDv7(object):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
         dggs_ops = self.dgapi_grid_stats(dggs)
+        if self.debug is True:
+            print(dggs_ops)
+
         df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
 
         df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
@@ -890,17 +935,20 @@ class DGGRIDv7(object):
         df['Cells'] = df['Cells'].astype(np.int64)
         return df
 
+
     def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False):
         """
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
+            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
         subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+
 
         if not clip_geom is None and clip_geom.area > 0:
 
@@ -912,19 +960,35 @@ class DGGRIDv7(object):
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
                 })
 
+            if self.has_gdal is False:
+                subset_conf.update({
+                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                })
+
         output_conf = {
             'cell_output_type': 'GDAL',
+            'point_output_type': 'NONE',
             'cell_output_gdal_format' : self.tmp_geo_out['driver'],
             'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
-        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.has_gdal is False:
+            output_conf.update({
+                'cell_output_type': self.tmp_geo_out['driver'].upper(),
+                'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
+            })
+            output_conf.pop('cell_output_gdal_format', None)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.debug is True:
+            print(dggs_ops)
+
+        gdf = gpd.read_file( ( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve(), driver=self.tmp_geo_out['driver'] )
 
         try:
             os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
             os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+            os.remove( str( Path(tmp_dir) / f"points.gen") )
         except Exception:
             pass
 
@@ -932,11 +996,13 @@ class DGGRIDv7(object):
             return self.post_process_split_dateline(gdf)
         return gdf
 
-    def grid_centerpoint_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False):
+
+    def grid_cell_centroids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
         """
         generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
+            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -954,13 +1020,30 @@ class DGGRIDv7(object):
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
                 })
 
+            if self.has_gdal is False:
+                subset_conf.update({
+                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                })
+
+
         output_conf = {
             'point_output_type': 'GDAL',
+            'cell_output_type': 'NONE',
             'point_output_gdal_format' : self.tmp_geo_out['driver'],
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
+        if self.has_gdal is False:
+            output_conf.update({
+                'point_output_type': self.tmp_geo_out['driver'].upper(),
+                'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
+            })
+            output_conf.pop('point_output_gdal_format', None)
+
+
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.debug is True:
+            print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
@@ -971,15 +1054,15 @@ class DGGRIDv7(object):
         except Exception:
             pass
 
-        if split_dateline == True:
-            return self.post_process_split_dateline(gdf)
         return gdf
+
 
     def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
-            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids for subsetting
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, ZORDER ..?) for subsetting
+            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -993,6 +1076,7 @@ class DGGRIDv7(object):
             seq_df = pd.DataFrame({ 'seqs': cell_id_list})
             seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=['seqs'], sep=' ')
 
+            # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             subset_conf.update({
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
@@ -1000,11 +1084,22 @@ class DGGRIDv7(object):
 
         output_conf = {
             'cell_output_type': 'GDAL',
+            'point_output_type': 'NONE',
             'cell_output_gdal_format' : self.tmp_geo_out['driver'],
             'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
+        if self.has_gdal is False:
+            output_conf.update({
+                'cell_output_type': self.tmp_geo_out['driver'].upper(),
+                'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
+            })
+            output_conf.pop('cell_output_gdal_format', None)
+
+
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.debug is True:
+            print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
@@ -1029,11 +1124,13 @@ class DGGRIDv7(object):
             return self.post_process_split_dateline(gdf)
         return gdf
 
-    def grid_centerpoint_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None):
+
+    def grid_cell_centroids_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None):
         """
         generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
-            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids for subsetting
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER .. TODO) for subsetting
+            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1047,6 +1144,7 @@ class DGGRIDv7(object):
             seq_df = pd.DataFrame({ 'seqs': cell_id_list})
             seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=['seqs'], sep=' ')
 
+            # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             subset_conf.update({
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
@@ -1054,11 +1152,22 @@ class DGGRIDv7(object):
 
         output_conf = {
             'point_output_type': 'GDAL',
+            'cell_output_type': 'None',
             'point_output_gdal_format' : self.tmp_geo_out['driver'],
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
+        if self.has_gdal is False:
+            output_conf.update({
+                'point_output_type': self.tmp_geo_out['driver'].upper(),
+                'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
+            })
+            output_conf.pop('point_output_gdal_format', None)
+
+
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.debug is True:
+            print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
@@ -1082,11 +1191,14 @@ class DGGRIDv7(object):
 
         return gdf
 
+
     def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None):
         """
-        generates a DGGS grid and returns all the cellids as a pandas dataframe
+        generates a DGGS grid and returns all the cellids as a pandas dataframe (TODO extend for Z3, Z7, ZORDER ..)
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
+            TODO could cellids be generated for COARSE_CELLS? Generate child id from list of parent ids?
+            TODO grid_gen enable output_address_type for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1104,12 +1216,21 @@ class DGGRIDv7(object):
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
                 })
 
+            if self.has_gdal is False:
+                subset_conf.update({
+                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                })
+
+
         output_conf = {
             'point_output_type': 'TEXT',
+            'cell_output_type': 'NONE',
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             }
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
+        if self.debug is True:
+            print(dggs_ops)
 
         df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None)
         df = df.dropna()
@@ -1122,11 +1243,13 @@ class DGGRIDv7(object):
 
         return df
 
+
     def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False):
         """
         takes a geodataframe with point geometry and optional additional value columns and returns:
             a) if cell_ids_only == True: the same geodataframe with an additional column with the cell ids
             b) if cell_ids_only == False: a new Geodataframe with geometry type Polygon, with column of cell ids and the additional columns
+            TODO: add output address type to enable Z3, Z7, ZORDER addresses
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1155,6 +1278,8 @@ class DGGRIDv7(object):
             }
 
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
+        if self.debug is True:
+            print(dggs_ops)
 
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None)
         df = df.dropna()

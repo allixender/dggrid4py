@@ -1,15 +1,17 @@
 [tool.poetry]
 name = "dggrid4py"
-version = "0.2.7"
+version = "0.2.8"
 description = "a Python library to run highlevel functions of DGGRIDv7 and v8"
-authors = ["Alexander Kmoch <alexander.kmoch@ut.ee>"]
+authors = ["Alexander Kmoch <alexander.kmoch@ut.ee>",
+    "Wai Tik Chan <wai.tik.chan@ut.ee>",
+    "Luís Moreira de Sousa <luis.de.sousa@protonmail.ch>"]
 license = "AGPL-3.0-or-later"
 readme = "README.md"
 repository = "https://github.com/allixender/dggrid4py"
 homepage = "https://github.com/allixender/dggrid4py"
 keywords = ["python", "GIS", "DGGS", "DGGRID", "hexagons", "grids", "spatial statistics"]
 classifiers = [
-  "Development Status :: 4 - Beta",
+  "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Intended Audience :: Education",
   "Intended Audience :: Science/Research",
