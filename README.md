@@ -35,6 +35,8 @@ gdf1 = dggrid_instance.grid_cell_polygons_for_extent('ISEA4T', 5)
 print(gdf1.head())
 gdf1.to_file('isea4t_5.shp')
 
+gdf_centroids = dggrid_instance.grid_cell_centroids_for_extent(dggs_type='ISEA7H', resolution=4, mixed_aperture_level=None, clip_geom=None)
+
 # clip extent
 clip_bound = shapely.geometry.box(20.2,57.00, 28.4,60.0 )
 

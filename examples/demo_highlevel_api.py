@@ -46,6 +46,8 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     # print(gdf3.head())
     gdf3_a.to_file('/tmp/est_shape_isea7h_9.shp')
 
+    gdf_centroids = dggrid_instance.grid_cell_centroids_for_extent(dggs_type='ISEA7H', resolution=4, mixed_aperture_level=None, clip_geom=None)
+    
     df1 = dggrid_instance.grid_stats_table('ISEA7H', 8)
     # print(df1.head(8))
     df1.to_csv('/tmp/eisea7h_8_stats.csv', index=False)
