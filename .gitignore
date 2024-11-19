@@ -86,3 +86,5 @@ tests/temp_*
 
 docs/source/generated/
 test_script.py
+
+dggrid4py.code-workspace
