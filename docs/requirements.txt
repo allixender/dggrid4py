@@ -6,5 +6,5 @@ pandas
 fiona
 shapely
 geopandas
-dggrid4py==0.3.0
+dggrid4py==0.3.1
 

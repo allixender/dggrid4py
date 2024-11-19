@@ -11,8 +11,8 @@ project = 'dggrid4py'
 copyright = '2024, Alexander Kmoch'
 author = "Alexander Kmoch"
 
-release = '0.3.0'
-version = '0.3.0'
+release = '0.3.1'
+version = '0.3.1'
 
 # -- General configuration
 

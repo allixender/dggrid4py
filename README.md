@@ -6,9 +6,9 @@
 
 GNU AFFERO GENERAL PUBLIC LICENSE
 
-[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.1b was released 12. January 2024
+[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.34 was released 13. November 2024
 
-- [DGGRID Version 8.1b on GitHub](https://github.com/sahrk/DGGRID)
+- [DGGRID Version 8.3 on GitHub](https://github.com/sahrk/DGGRID)
 - [DGGRID User Manual](https://github.com/sahrk/DGGRID/blob/d08e10d761f7bedd72a253ab1057458f339de51e/dggridManualV81b.pdf)
 
 You need the ddgrid tool compiled available on the system.
@@ -19,6 +19,7 @@ Besides some lowlevel access influence the dggrid operations' metafile creation,
 - grid_cell_polygons_from_cellids(): geometry_from_cellid for dggs at resolution (from id list)
 - grid_cellids_for_extent(): get_all_indexes/cell_ids for dggs at resolution (clip or world)
 - cells_for_geo_points(): poly_outline for point/centre at resolution
+- address_transform():  conversion betwenn cell_id address types, like SEQNUM, Z7, or Q2DI
 
 
 ```python
@@ -99,7 +100,7 @@ After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rat
 ## Bundling for different operating systems
 
 Having to compile DGGRID for Windows can be a bit challenging. We are
-working on an updated conda package. Currently DGGRID v7.8 is available on conda-forge:
+working on an updated conda package. Currently DGGRID v8.3 is available on conda-forge:
 
 [![Latest version on conda-forge](https://anaconda.org/conda-forge/dggrid/badges/version.svg)](https://anaconda.org/conda-forge/dggrid)
 

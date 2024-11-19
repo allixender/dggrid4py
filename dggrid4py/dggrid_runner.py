@@ -1170,16 +1170,16 @@ class DGGRIDv7(object):
                 if self.debug is True:
                     print(f"cannot switch address types on the fly here: {input_address_type} !=  {output_address_type}")
 
-            seq_df['cell_exists'] = True
+            # seq_df['cell_exists'] = True
             if output_address_type in ['SEQNUM']:
                 seq_df[input_address_type] = seq_df[input_address_type].astype(np.int64)
 
-            seq_df.set_index(input_address_type, inplace=True)
+            # seq_df.set_index(input_address_type, inplace=True)
             name_col = 'name' if 'name' in gdf.columns else 'Name'
             if output_address_type in ['SEQNUM']:
                 gdf[name_col] = gdf[name_col].astype(np.int64)
-            gdf = gdf.join( seq_df, how='inner', on=name_col)
-            gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
+            # gdf = gdf.join( seq_df, how='inner', left_on=name_col, right_on=input_address_type)
+            # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
         
         if self.debug is False:
             try:
@@ -1276,16 +1276,16 @@ class DGGRIDv7(object):
                 if self.debug is True:
                     print(f"cannot switch address types on the fly here: {input_address_type} !=  {output_address_type}")
 
-            seq_df['cell_exists'] = True
+            # seq_df['cell_exists'] = True
             if output_address_type in ['SEQNUM']:
                 seq_df[input_address_type] = seq_df[input_address_type].astype(np.int64)
 
-            seq_df.set_index(input_address_type, inplace=True)
+            # seq_df.set_index(input_address_type, inplace=True)
             name_col = 'name' if 'name' in gdf.columns else 'Name'
             if output_address_type in ['SEQNUM']:
                 gdf[name_col] = gdf[name_col].astype(np.int64)
-            gdf = gdf.join( seq_df, how='inner', on=name_col)
-            gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
+            # gdf = gdf.join( seq_df, how='inner', on=name_col)
+            # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         if self.debug is False:
             try:

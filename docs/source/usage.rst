@@ -78,17 +78,28 @@ comfortable geopython libraries, like shapely and geopandas
    gdf7 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 3, split_dateline=True)
    gdf7.to_file('global_isea7h_3_interrupted.shp')
 
-    gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
-    print(gdf_z1.head(3))
+   gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
+   print(gdf_z1.head(3))
 
-    df_z1 = dggrid_instance.guess_zstr_resolution(gdf_z1['name'].values, 'IGEO7', input_address_type='Z7_STRING')
-    print(df_z1.head(3))
+   df_z1 = dggrid_instance.guess_zstr_resolution(gdf_z1['name'].values, 'IGEO7', input_address_type='Z7_STRING')
+   print(df_z1.head(3))
 
-    df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
-    print(df_q2di.head(3))
+   df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
+   print(df_q2di.head(3))
 
-    df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
-    print(df_tri.head(3))
+   df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
+   print(df_tri.head(3))
+
+   children = dggrid_instance.grid_cell_polygons_from_cellids(
+      cell_id_list=['00012502340'],    # the input/parent cell id
+      dggs_type='IGEO7',               # dggs type
+      resolution=11,                   # target resolution of children
+      clip_subset_type='COARSE_CELLS', # new parameter
+      clip_cell_res=9,                 # resolution of parent cell
+      input_address_type='Z7_STRING',  # address_type
+      output_address_type='Z7_STRING'  # address_type
+   )
+   print(children.head(3))
 
 TODO
 ----

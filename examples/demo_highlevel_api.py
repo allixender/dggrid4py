@@ -99,6 +99,18 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
     print(df_tri.head(3))
 
+    children = dggrid_instance.grid_cell_polygons_from_cellids(
+        cell_id_list=['00012502340'],    # the input/parent cell id
+        dggs_type='IGEO7',               # dggs type
+        resolution=11,                   # target resolution of children
+        clip_subset_type='COARSE_CELLS', # new parameter
+        clip_cell_res=9,                 # resolution of parent cell
+        input_address_type='Z7_STRING',  # address_type
+        output_address_type='Z7_STRING'  # address_type
+    )
+    print(children.head(3))
+
+
 
 def highlevel_grid_stats(dggrid_instance):
 
