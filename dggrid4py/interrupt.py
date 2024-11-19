@@ -31,7 +31,7 @@ def get_geom_coords(geometry):
 
     wkt = geometry.wkt
     wkt = wkt.replace("POLYGON ((","")
-    wkt = wkt.replace("POLYGON ))","")
+    wkt = wkt.replace("))","")
     wkt = wkt.split(", ")
 
     return wkt

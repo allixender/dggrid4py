@@ -28,7 +28,8 @@ import shapely
 from dggrid4py import DGGRIDv7
 
 # create an inital instance that knows where the dggrid tool lives, configure temp workspace and log/stdout output
-dggrid_instance = DGGRIDv7(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False)
+dggrid_instance = DGGRIDv7(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False, tmp_geo_out_legacy=False, debug=False)
+
 
 # global ISEA4T grid at resolution 5 into GeoDataFrame to Shapefile
 gdf1 = dggrid_instance.grid_cell_polygons_for_extent('ISEA4T', 5)
@@ -69,12 +70,21 @@ gdf6.to_file('from_seqnums_isea7h_5.shp')
 gdf7 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 3, split_dateline=True)
 gdf7.to_file('global_isea7h_3_interrupted.shp')
 
+gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
+print(gdf_z1.head(3))
+
+df_z1 = dggrid_instance.guess_zstr_resolution(gdf_z1['name'].values, 'IGEO7', input_address_type='Z7_STRING')
+print(df_z1.head(3))
+
+df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
+print(df_q2di.head(3))
+
+df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
+print(df_tri.head(3))
+
 ```
 
 ## TODO:
-
-- sample vector values into dggs cells (aka binning)
-- sample raster values into dggs cells
 
 - get parent_for_cell_id at coarser resolution
 - get children_for_cell_id at finer resolution

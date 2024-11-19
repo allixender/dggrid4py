@@ -82,6 +82,7 @@ poetry.lock
 
 tests/metafile_*
 tests/dggrid_*
+tests/temp_*
 
 docs/source/generated/
 test_script.py

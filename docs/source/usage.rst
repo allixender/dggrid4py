@@ -26,6 +26,7 @@ comfortable geopython libraries, like shapely and geopandas
 -  grid_cellids_for_extent(): get_all_indexes/cell_ids for dggs at
    resolution (clip or world)
 -  cells_for_geo_points(): poly_outline for point/centre at resolution
+-  address_transform():  conversion betwenn cell_id address types, like SEQNUM, Z7, or Q2DI
 
 .. code:: python
 
@@ -35,7 +36,7 @@ comfortable geopython libraries, like shapely and geopandas
    from dggrid4py import DGGRIDv7
 
    # create an inital instance that knows where the dggrid tool lives, configure temp workspace and log/stdout output
-   dggrid_instance = DGGRIDv7(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False)
+   dggrid_instance = DGGRIDv7(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False, tmp_geo_out_legacy=False, debug=False)
 
    # global ISEA4T grid at resolution 5 into GeoDataFrame to Shapefile
    gdf1 = dggrid_instance.grid_cell_polygons_for_extent('ISEA4T', 5)
@@ -77,14 +78,22 @@ comfortable geopython libraries, like shapely and geopandas
    gdf7 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 3, split_dateline=True)
    gdf7.to_file('global_isea7h_3_interrupted.shp')
 
+    gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
+    print(gdf_z1.head(3))
+
+    df_z1 = dggrid_instance.guess_zstr_resolution(gdf_z1['name'].values, 'IGEO7', input_address_type='Z7_STRING')
+    print(df_z1.head(3))
+
+    df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
+    print(df_q2di.head(3))
+
+    df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
+    print(df_tri.head(3))
+
 TODO
 ----
 
-Contributions are welcome:
-
--  sample vector values into dggs cells (aka binning)
-
--  sample raster values into dggs cells
+Contributions are welcome
 
 -  get parent_for_cell_id at coarser resolution
 
