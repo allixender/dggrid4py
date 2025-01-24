@@ -1344,7 +1344,8 @@ class DGGRIDv7(object):
         if self.debug is True:
             print(dggs_ops)
 
-        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None)
+        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
+        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype=datatype)
         df = df.dropna()
 
         if self.debug is False:
@@ -1400,7 +1401,7 @@ class DGGRIDv7(object):
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
         if self.debug is True:
             print(dggs_ops)
-        datatype = {0: str} if ('STRING' in output_address_type) else {}
+        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype=datatype)
         df = df.dropna()
         cell_id_list = df[0].values
