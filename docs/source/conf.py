@@ -8,11 +8,11 @@ sys.path.insert(0, os.path.abspath("../"))
 # -- Project information
 
 project = 'dggrid4py'
-copyright = '2024, Alexander Kmoch'
+copyright = '2025, Alexander Kmoch'
 author = "Alexander Kmoch"
 
-release = '0.3.1'
-version = '0.3.1'
+release = '0.3.2'
+version = '0.3.2'
 
 # -- General configuration
 

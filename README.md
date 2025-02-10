@@ -1,6 +1,6 @@
 # dggrid4py - a Python library to run highlevel functions of DGGRID
 
-[![PyPI version](https://badge.fury.io/py/dggrid4py.svg)](https://badge.fury.io/py/dggrid4py) [![DOI](https://zenodo.org/badge/295495597.svg)](https://zenodo.org/badge/latestdoi/295495597) [![Documentation Status](https://readthedocs.org/projects/dggrid4py/badge/?version=latest)](https://dggrid4py.readthedocs.io/en/latest/?badge=latest)
+[![PyPI version](https://badge.fury.io/py/dggrid4py.svg)](https://badge.fury.io/py/dggrid4py) [![DOI](https://zenodo.org/badge/295495597.svg)](https://zenodo.org/badge/latestdoi/295495597) [![Documentation Status](https://readthedocs.org/projects/dggrid4py/badge/?version=latest)](https://dggrid4py.readthedocs.io/en/latest/?badge=latest) [GitHub](https://github.com/allixender/dggrid4py/)
 
 [![Population Gridded](day-04-hexa.png)](https://twitter.com/allixender/status/1324055326111485959)
 
