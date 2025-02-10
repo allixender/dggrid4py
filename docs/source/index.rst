@@ -19,7 +19,7 @@ created and maintained by Kevin Sahr. DGGRID version 8.34 was released 13. Novem
 Contents
 --------
 
-`GitHub <https://github.com/allixender/dggrid4py>`__
+Find the source repository on `GitHub <https://github.com/allixender/dggrid4py>`__ !
 
 .. toctree::
 

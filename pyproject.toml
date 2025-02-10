@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "dggrid4py"
-version = "0.3.1"
+version = "0.3.2"
 description = "a Python library to run highlevel functions of DGGRIDv7 and v8"
 authors = ["Alexander Kmoch <alexander.kmoch@ut.ee>",
     "Wai Tik Chan <wai.tik.chan@ut.ee>",
