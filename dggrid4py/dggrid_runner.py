@@ -656,7 +656,7 @@ class DGGRIDv7(object):
                 metafile.append("output_last_seqnum " + str(subset_conf['output_last_seqnum']))
         else:
             raise ValueError('something is not correct in subset_conf')
-        
+
         if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in input_address_types:
             metafile.append("input_address_type " + subset_conf['input_address_type'])
 
@@ -951,7 +951,7 @@ class DGGRIDv7(object):
         df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
         df['Resolution'] = df['Resolution'].astype(int)
         df['Cells'] = df['Cells'].astype(np.int64)
-        
+
         return df
 
 
@@ -997,7 +997,7 @@ class DGGRIDv7(object):
                 'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('cell_output_gdal_format', None)
-        
+
         if not output_address_type is None and output_address_type in output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
@@ -1065,7 +1065,7 @@ class DGGRIDv7(object):
                 'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('point_output_gdal_format', None)
-        
+
         if not output_address_type is None and output_address_type in output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
@@ -1112,7 +1112,7 @@ class DGGRIDv7(object):
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
                 })
-            
+
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual paent cell type clip (also for Z3 ..)
             if (
@@ -1125,7 +1125,7 @@ class DGGRIDv7(object):
                         'input_address_type': input_address_type
                     }
                 )
-                
+
                 if not clip_subset_type is None and clip_subset_type in ['COARSE_CELLS']:
                     subset_conf.update(
                         {
@@ -1180,7 +1180,7 @@ class DGGRIDv7(object):
                 gdf[name_col] = gdf[name_col].astype(np.int64)
             # gdf = gdf.join( seq_df, how='inner', left_on=name_col, right_on=input_address_type)
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
-        
+
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
@@ -1218,7 +1218,7 @@ class DGGRIDv7(object):
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
                 })
-            
+
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual paent cell type clip (also for Z3 ..)
             if (
@@ -1231,7 +1231,7 @@ class DGGRIDv7(object):
                         'input_address_type': input_address_type
                     }
                 )
-                
+
                 if not clip_subset_type is None and clip_subset_type in ['COARSE_CELLS']:
                     subset_conf.update(
                         {
@@ -1344,7 +1344,8 @@ class DGGRIDv7(object):
         if self.debug is True:
             print(dggs_ops)
 
-        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None)
+        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
+        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype=datatype)
         df = df.dropna()
 
         if self.debug is False:
@@ -1386,7 +1387,7 @@ class DGGRIDv7(object):
             }
 
         output_conf = {
-            'output_file_name': str( (Path(tmp_dir) / f"seqnums_{tmp_id}.txt").resolve()),
+            'output_file_name': str( (Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt").resolve()),
             'output_address_type': 'SEQNUM',
             'output_delimiter': "\",\""
             }
@@ -1400,8 +1401,8 @@ class DGGRIDv7(object):
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
         if self.debug is True:
             print(dggs_ops)
-
-        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None)
+        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
+        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype=datatype)
         df = df.dropna()
         cell_id_list = df[0].values
 
@@ -1413,14 +1414,15 @@ class DGGRIDv7(object):
                 pass
 
         if cell_ids_only == True:
-            geodf_points_wgs84['seqnums'] = cell_id_list
+            geodf_points_wgs84['name'] = cell_id_list
             return geodf_points_wgs84
         else:
             # grid_gen from seqnums
             gdf = self.grid_cell_polygons_from_cellids(cell_id_list=cell_id_list,
                                                     dggs_type=dggs_type,
                                                     resolution=resolution,
-                                                    mixed_aperture_level=mixed_aperture_level)
+                                                    mixed_aperture_level=mixed_aperture_level, input_address_type=output_address_type,
+                                                    output_address_type=output_address_types)
             try:
                 for col in cols_ordered:
                     gdf[col] = geodf_points_wgs84[col].values
@@ -1429,14 +1431,14 @@ class DGGRIDv7(object):
 
             if split_dateline == True:
                 return self.post_process_split_dateline(gdf)
-            
+
             return gdf
 
 
     def address_transform(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None, input_address_type='SEQNUM', output_address_type='SEQNUM'):
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
-            cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER .. TODO) 
+            cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER .. TODO)
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1444,10 +1446,10 @@ class DGGRIDv7(object):
 
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
-        
+
         if not input_address_type in input_address_types:
             raise ValueError(f"unknown input_address_type: {input_address_type}")
-        
+
         if not output_address_type in output_address_types:
             raise ValueError(f"unknown output_address_type: {output_address_type}")
 
@@ -1466,7 +1468,7 @@ class DGGRIDv7(object):
             'output_delimiter': "\" \""
             }
 
-        
+
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
         if self.debug is True:
             print(dggs_ops)
@@ -1481,20 +1483,20 @@ class DGGRIDv7(object):
                 os.remove( str( Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt") )
             except Exception:
                 pass
-        
+
         return seq_df
-    
+
 
     def guess_zstr_resolution(self, cell_id_list, dggs_type, input_address_type='Z7_STRING'):
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
-        
+
         if not input_address_type in ['Z3_STRING', 'Z7_STRING']:
             raise ValueError(f"this will likely not work for this input_address_type: {input_address_type} | only Z3 and Z7 verified")
-        
+
         if not dggs_type in ['ISEA3H', 'ISEA7H', 'IGEO7']:
             raise ValueError(f"this will likely not work for this dggs_type: {dggs_type} | only Z3 and Z7 compatible")
-        
+
         df = pd.DataFrame({ input_address_type: cell_id_list})
 
         # df = self.address_transform(cell_id_list, dggs_type, input_address_type=input_address_type,
@@ -1502,7 +1504,7 @@ class DGGRIDv7(object):
         df['resolution'] = df[input_address_type].apply(lambda s: len(s) - 2)
 
         return df
-        
+
 
 
 
