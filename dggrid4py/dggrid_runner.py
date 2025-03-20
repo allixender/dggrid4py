@@ -1409,6 +1409,8 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
+                os.remove( str( Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt") )
+                # probably not needed anymore
                 os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
             except Exception:
                 pass
