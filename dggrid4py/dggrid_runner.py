@@ -27,17 +27,17 @@ from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
 fiona_drivers = fiona.supported_drivers
 
-# SHAPEFIL is included more natively in DGGRID than GeoJSON
+# SHAPEFIL is included more natively in DGGRID than GeoJSON (esp. as clip_subset_type)
 def get_geo_out(legacy=True, has_gdal=True):
     if legacy is True and has_gdal is False:
-        return { "driver": "GeoJSON", "ext": "geojson"}
+        return { "driver": "Shapefile", "ext": "shp"}
 
     # TODO in future would be great to have GeoArrow without GDAL
     if legacy is False and has_gdal is False:
-        return { "driver": "GeoJSON", "ext": "geojson"}
+        return { "driver": "Shapefile", "ext": "shp"}
 
     if legacy is True and has_gdal is True:
-        return { "driver": "GeoJSON", "ext": "geojson"}
+        return { "driver": "Shapefile", "ext": "shp"}
 
     if legacy is False and has_gdal is True:
         if "FlatGeobuf" in fiona_drivers.keys() and "w" in fiona_drivers["FlatGeobuf"]:
@@ -46,7 +46,7 @@ def get_geo_out(legacy=True, has_gdal=True):
         return { "driver": "GPKG", "ext": "gpgk"}
 
     # Failsafe
-    return { "driver": "GeoJSON", "ext": "geojson"}
+    return { "driver": "Shapefile", "ext": "shp"}
 
 
 # specify a ISEA3H
@@ -919,6 +919,12 @@ class DGGRIDv7(object):
         # if we get eventually binning working we will have dynamic additional column for the binned values
         # cols = dict({ (idx, field) for idx, field in enumerate(gdf.columns)})
 
+        name_col = 'name'
+        for potential_name_col in ['name', 'Name', 'global_id']:
+            if potential_name_col in gdf.columns:
+                name_col = potential_name_col
+                break
+
         for row in gdf.itertuples():
             poly = row.geometry
             coords = get_geom_coords(poly)
@@ -927,9 +933,9 @@ class DGGRIDv7(object):
                 geoms = interrupt_cell(coords)
 
                 for geom in geoms:
-                    cellsNew.loc[len(cellsNew)] = [row.name, geom]
+                    cellsNew.loc[len(cellsNew)] = [getattr(row, name_col), geom]
             else:
-                cellsNew.loc[len(cellsNew)] = [row.name, poly]
+                cellsNew.loc[len(cellsNew)] = [getattr(row, name_col), poly]
 
         return cellsNew
 
@@ -1015,7 +1021,19 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"points.gen") )
             except Exception:
                 pass
@@ -1083,7 +1101,19 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"cells.gen") )
             except Exception:
                 pass
@@ -1177,7 +1207,12 @@ class DGGRIDv7(object):
                 seq_df[input_address_type] = seq_df[input_address_type].astype(np.int64)
 
             # seq_df.set_index(input_address_type, inplace=True)
-            name_col = 'name' if 'name' in gdf.columns else 'Name'
+            # possible column names: 'name', 'Name', 'global_id'
+            name_col = 'name'
+            for potential_name_col in ['name', 'Name', 'global_id']:
+                if potential_name_col in gdf.columns:
+                    name_col = potential_name_col
+                    break
             if output_address_type in ['SEQNUM']:
                 gdf[name_col] = gdf[name_col].astype(np.int64)
             # gdf = gdf.join( seq_df, how='inner', left_on=name_col, right_on=input_address_type)
@@ -1186,7 +1221,19 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"points.gen") )
             except Exception:
                 pass
@@ -1292,6 +1339,12 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
                 os.remove( str( Path(tmp_dir) / f"cells.gen") )
             except Exception:
@@ -1354,6 +1407,12 @@ class DGGRIDv7(object):
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt") )
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
+                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
+                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
+            except Exception:
+                pass
+            try:
                 os.remove( str( Path(tmp_dir) / f"points.gen") )
             except Exception:
                 pass

@@ -4,11 +4,6 @@
 .. automodule:: dggrid4py.interrupt
 
    
-   
-   
-
-   
-   
    .. rubric:: Functions
 
    .. autosummary::

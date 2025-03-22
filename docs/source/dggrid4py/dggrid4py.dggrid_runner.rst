@@ -4,15 +4,11 @@
 .. automodule:: dggrid4py.dggrid_runner
 
    
-   
    .. rubric:: Module Attributes
 
    .. autosummary::
    
       dggrid_operations
-   
-   
-
    
    
    .. rubric:: Functions
@@ -26,9 +22,6 @@
       specify_orient_type_args
       specify_resolution
       specify_topo_aperture
-   
-   
-
    
    
    .. rubric:: Classes

@@ -104,9 +104,10 @@ comfortable geopython libraries, like shapely and geopandas
 TODO
 ----
 
-Contributions are welcome
+Contributions are welcome.
 
 -  get parent_for_cell_id at coarser resolution
 
 -  get children_for_cell_id at finer resolution
 
+With the IGEO7/Z7 index system parent/child relations are available.

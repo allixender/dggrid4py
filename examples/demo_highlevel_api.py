@@ -12,7 +12,7 @@ import geopandas as gpd
 import shapely
 
 import dggrid4py
-from dggrid4py import DGGRIDv7, dggs_types
+from dggrid4py import DGGRIDv7, dggs_types, igeo7
 
 
 def highlevel_grid_gen_and_transform(dggrid_instance):
@@ -22,6 +22,14 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     - grid_cell_polygons_from_cellids(): geometry_from_cellid for dggs at resolution (from id list)
     - grid_cellids_for_extent(): get_all_indexes/cell_ids for dggs at resolution (clip or world)
     - cells_for_geo_points(): poly_outline for point/centre at resolution
+
+    Unfortunately, the DGGRID API  has changed the cell_id column over the years:
+    # possible column names: 'name', 'Name', 'global_id'
+    name_col = 'name'
+    for potential_name_col in ['name', 'Name', 'global_id']:
+        if potential_name_col in gdf.columns:
+            name_col = potential_name_col
+            break
     """
 
     est_bound = shapely.geometry.box(20.2,57.00, 28.4,60.0 )
@@ -90,8 +98,8 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
     print(gdf_z1.head(3))
 
-    df_z1 = dggrid_instance.guess_zstr_resolution(gdf_z1['name'].values, 'IGEO7', input_address_type='Z7_STRING')
-    print(df_z1.head(3))
+    gdf_z1['resolution'] = gdf_z1['global_id'].apply(igeo7.get_z7string_resolution)
+    print(gdf_z1.head(3))
 
     df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
     print(df_q2di.head(3))
@@ -99,12 +107,14 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
     print(df_tri.head(3))
 
+    # this might not work with higher resolution (9) without GDAL datatypes (Shapefile index column length constraint)
+    # FATAL ERROR: DgOutShapefile::writeDbf() index string length of 12 exceeds value of parameter shapefile_id_field_length.
     children = dggrid_instance.grid_cell_polygons_from_cellids(
-        cell_id_list=['00012502340'],    # the input/parent cell id
+        cell_id_list=['000125023'],    # the input/parent cell id
         dggs_type='IGEO7',               # dggs type
-        resolution=11,                   # target resolution of children
+        resolution=9,                   # target resolution of children
         clip_subset_type='COARSE_CELLS', # new parameter
-        clip_cell_res=9,                 # resolution of parent cell
+        clip_cell_res=7,                 # resolution of parent cell
         input_address_type='Z7_STRING',  # address_type
         output_address_type='Z7_STRING'  # address_type
     )

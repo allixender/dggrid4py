@@ -24,6 +24,7 @@
       ~DGGRIDv7.grid_cell_polygons_from_cellids
       ~DGGRIDv7.grid_cell_centroids_from_cellids
       ~DGGRIDv7.grid_cellids_for_extent
+      ~DGGRIDv7.cells_for_geo_points
       ~DGGRIDv7.grid_stats_table
 
       ~DGGRIDv7.dgapi_grid_gen
@@ -33,7 +34,6 @@
       ~DGGRIDv7.dgapi_pres_binning
 
       ~DGGRIDv7.cells_for_geo_points
-      ~DGGRIDv7.guess_zstr_resolution
       ~DGGRIDv7.address_transform
 
    

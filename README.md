@@ -90,6 +90,8 @@ print(df_tri.head(3))
 - get parent_for_cell_id at coarser resolution
 - get children_for_cell_id at finer resolution
 
+Remark: This is now possible with the IGEO7/Z7 system.
+
 ## Related work:
 
 Originally insprired by [dggridR](https://github.com/r-barnes/dggridR), Richard Barnes’ R interface to DGGRID. However, dggridR is directly linked via Rcpp to DGGRID and calls native C/C++ functions.
