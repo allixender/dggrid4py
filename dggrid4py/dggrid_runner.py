@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2022 - Alexander Kmoch
+# Copyright (c) 2022-2025 - Alexander Kmoch
 # Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE
 # file for details.
 #
-# Author: Alexander Kmoch (alexander.kmoch@ut.ee)
-# Date: 07-12-2022
+# Authors:
+# Alexander Kmoch (alexander.kmoch@ut.ee)
+# Wai Tik Chan (wai.tik.chan@ut.ee)
 #
 
 from pathlib import Path
@@ -1485,27 +1486,6 @@ class DGGRIDv7(object):
                 pass
 
         return seq_df
-
-
-    def guess_zstr_resolution(self, cell_id_list, dggs_type, input_address_type='Z7_STRING'):
-        if cell_id_list is None or len(cell_id_list) <= 0:
-            raise ValueError("Expecting cell_id_list to transform.")
-
-        if not input_address_type in ['Z3_STRING', 'Z7_STRING']:
-            raise ValueError(f"this will likely not work for this input_address_type: {input_address_type} | only Z3 and Z7 verified")
-
-        if not dggs_type in ['ISEA3H', 'ISEA7H', 'IGEO7']:
-            raise ValueError(f"this will likely not work for this dggs_type: {dggs_type} | only Z3 and Z7 compatible")
-
-        df = pd.DataFrame({ input_address_type: cell_id_list})
-
-        # df = self.address_transform(cell_id_list, dggs_type, input_address_type=input_address_type,
-        #                             output_address_type=input_address_type + '_STRING')
-        df['resolution'] = df[input_address_type].apply(lambda s: len(s) - 2)
-
-        return df
-
-
 
 
 #############################################################

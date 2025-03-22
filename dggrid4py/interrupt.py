@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 # coding=utf8
 #
-# Copyright (c) 2022 - Luís Moreira de Sousa & Alexander Kmoch
+# Copyright (c) 2022-2025 - Luís Moreira de Sousa & Alexander Kmoch
 # Licenced under GNU AFFERO GENERAL PUBLIC LICENSE. Please consult the LICENCE 
 # file for details.
 #
