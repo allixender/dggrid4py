@@ -27,6 +27,7 @@ from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
 fiona_drivers = fiona.supported_drivers
 
+# SHAPEFIL is included more natively in DGGRID than GeoJSON
 def get_geo_out(legacy=True, has_gdal=True):
     if legacy is True and has_gdal is False:
         return { "driver": "GeoJSON", "ext": "geojson"}
@@ -1410,6 +1411,8 @@ class DGGRIDv7(object):
         if self.debug is False:
             try:
                 os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
+                os.remove( str( Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt") )
+                # probably not needed anymore
                 os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
             except Exception:
                 pass
