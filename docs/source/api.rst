@@ -5,6 +5,7 @@ API
 - dggrid4py.dggrid_runner
 - dggrid4py.interrupt
 - dggrid4py.igeo7
+- dggrid4py.tool
 
 
 .. toctree::

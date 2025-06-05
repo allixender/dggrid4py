@@ -9,7 +9,7 @@ import geopandas as gpd
 from shapely.geometry import Point, Polygon
 from shapely.ops import transform
 
-import igeo7
+from dggrid4py import igeo7
 
 
 def dggrid_get_res(dggrid_instance, dggrid_dggs="ISEA7H", max_res=16):
