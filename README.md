@@ -28,7 +28,9 @@ import shapely
 
 from dggrid4py import DGGRIDv7
 
+
 # create an inital instance that knows where the dggrid tool lives, configure temp workspace and log/stdout output
+# if you have 
 dggrid_instance = DGGRIDv7(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False, tmp_geo_out_legacy=False, debug=False)
 
 
@@ -82,6 +84,20 @@ print(df_q2di.head(3))
 
 df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
 print(df_tri.head(3))
+
+```
+
+
+### Portable DGGRID binary
+
+if you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
+
+```python
+
+from dggrid4py import tool
+
+dggrid_exec = tool.get_portable_executable(".")
+dggrid_instance_portable = DGGRIDv7(executable=dggrid_exec, working_dir='.', capture_logs=False, silent=True, has_gdal=False, tmp_geo_out_legacy=True, debug=False)
 
 ```
 

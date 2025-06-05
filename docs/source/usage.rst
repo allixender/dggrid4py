@@ -101,6 +101,21 @@ comfortable geopython libraries, like shapely and geopandas
    )
    print(children.head(3))
 
+
+Portable DGGRID binary
+----------------------
+
+If you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
+
+.. code:: python
+
+   from dggrid4py import tool
+
+   dggrid_exec = tool.get_portable_executable(".")
+   dggrid_instance_portable = DGGRIDv7(executable=dggrid_exec, working_dir='.', capture_logs=False, silent=True, has_gdal=False, tmp_geo_out_legacy=True, debug=False)
+
+
+
 TODO
 ----
 
