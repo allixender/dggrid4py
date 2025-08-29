@@ -88,3 +88,4 @@ docs/source/generated/
 test_script.py
 
 dggrid4py.code-workspace
+.DS_Store
