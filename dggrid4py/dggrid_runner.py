@@ -31,27 +31,27 @@ fiona_drivers = fiona.supported_drivers
 # SHAPEFIL is included more natively in DGGRID than GeoJSON (esp. as clip_subset_type)
 def get_geo_out(legacy=True, has_gdal=True):
     if legacy is True and has_gdal is False:
-        return { "driver": "Shapefile", "ext": "shp"}
+        return { "driver": "ESRI Shapefile", "legacy_driver": "Shapefile", "ext": "shp"}
 
     # TODO in future would be great to have GeoArrow without GDAL
     if legacy is False and has_gdal is False:
-        return { "driver": "Shapefile", "ext": "shp"}
+        return { "driver": "ESRI Shapefile", "legacy_driver": "Shapefile", "ext": "shp"}
 
     if legacy is True and has_gdal is True:
-        return { "driver": "Shapefile", "ext": "shp"}
+        return { "driver": "ESRI Shapefile", "legacy_driver": "Shapefile", "ext": "shp"}
 
     if legacy is False and has_gdal is True:
         if "FlatGeobuf" in fiona_drivers.keys() and "w" in fiona_drivers["FlatGeobuf"]:
-            return { "driver": "FlatGeobuf", "ext": "fgb"}
+            return { "driver": "FlatGeobuf", "legacy_driver": "FlatGeobuf", "ext": "fgb"}
 
-        return { "driver": "GPKG", "ext": "gpgk"}
+        return { "driver": "GPKG", "legacy_driver": "GPKG", "ext": "gpgk"}
 
     # Failsafe
-    return { "driver": "Shapefile", "ext": "shp"}
+    return { "driver": "ESRI Shapefile", "legacy_driver": "Shapefile", "ext": "shp"}
 
 
 
-    
+
 # specify a ISEA3H
 dggs_types = (
     'CUSTOM',  # parameters will be specified manually
@@ -992,19 +992,19 @@ class DGGRIDv7(object):
 
             if self.has_gdal is False:
                 subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
                 })
 
         output_conf = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
-            'cell_output_gdal_format' : self.tmp_geo_out['driver'],
+            'cell_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
             'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
         if self.has_gdal is False:
             output_conf.update({
-                'cell_output_type': self.tmp_geo_out['driver'].upper(),
+                'cell_output_type': self.tmp_geo_out['legacy_driver'].upper(),
                 'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('cell_output_gdal_format', None)
@@ -1071,20 +1071,20 @@ class DGGRIDv7(object):
 
             if self.has_gdal is False:
                 subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
                 })
 
 
         output_conf = {
             'point_output_type': 'GDAL',
             'cell_output_type': 'NONE',
-            'point_output_gdal_format' : self.tmp_geo_out['driver'],
+            'point_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
         if self.has_gdal is False:
             output_conf.update({
-                'point_output_type': self.tmp_geo_out['driver'].upper(),
+                'point_output_type': self.tmp_geo_out['legacy_driver'].upper(),
                 'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('point_output_gdal_format', None)
@@ -1175,13 +1175,13 @@ class DGGRIDv7(object):
         output_conf = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
-            'cell_output_gdal_format' : self.tmp_geo_out['driver'],
+            'cell_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
             'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
         if self.has_gdal is False:
             output_conf.update({
-                'cell_output_type': self.tmp_geo_out['driver'].upper(),
+                'cell_output_type': self.tmp_geo_out['legacy_driver'].upper(),
                 'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('cell_output_gdal_format', None)
@@ -1297,13 +1297,13 @@ class DGGRIDv7(object):
         output_conf = {
             'point_output_type': 'GDAL',
             'cell_output_type': 'None',
-            'point_output_gdal_format' : self.tmp_geo_out['driver'],
+            'point_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve())
             }
 
         if self.has_gdal is False:
             output_conf.update({
-                'point_output_type': self.tmp_geo_out['driver'].upper(),
+                'point_output_type': self.tmp_geo_out['legacy_driver'].upper(),
                 'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('point_output_gdal_format', None)
@@ -1382,7 +1382,7 @@ class DGGRIDv7(object):
 
             if self.has_gdal is False:
                 subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['driver'].upper()
+                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
                 })
 
 
