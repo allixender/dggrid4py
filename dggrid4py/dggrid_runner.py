@@ -1089,7 +1089,6 @@ class DGGRID(abc.ABC):
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
-            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1172,7 +1171,6 @@ class DGGRID(abc.ABC):
         generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
             a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
-            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1253,7 +1251,6 @@ class DGGRID(abc.ABC):
         generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
             b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, ZORDER ..?) for subsetting
-            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1377,8 +1374,7 @@ class DGGRID(abc.ABC):
         """
         generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
-            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER .. TODO) for subsetting
-            TODO grid_gen enable output_address_type / output_address_label for Z3, Z7, ZORDER?
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER) for subsetting
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1638,7 +1634,7 @@ class DGGRID(abc.ABC):
                           input_address_type='SEQNUM', output_address_type='SEQNUM', **output_conf_extra):
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
-            cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER .. TODO)
+            cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER)
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
