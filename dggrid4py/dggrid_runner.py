@@ -10,6 +10,8 @@
 #
 import abc
 import copy
+import dataclasses
+import decimal
 import uuid
 import shutil
 import os
@@ -231,6 +233,8 @@ DggridOperationsT = Literal[
 ]
 dggrid_operations = get_args(DggridOperationsT)
 
+DggsDegree = decimal.Decimal | float | str   # allow string to hardcode strictly
+
 DggridMetaConfigParameterT = str | float | int
 DggridMetaConfigT = TypedDict(
     "DggridMetaConfigT",
@@ -250,9 +254,9 @@ DggridMetaConfigT = TypedDict(
         "dggs_res_specify_intercell_distance": float,
         "dggs_orient_specify_type": DggsOrientSpecifyTypesT,
         "dggs_orient_rand_seed": int,
-        "dggs_vert0_lon": float,
-        "dggs_vert0_lat": float,
-        "dggs_vert0_azimuth": float,
+        "dggs_vert0_lon": DggsDegree,
+        "dggs_vert0_lat": DggsDegree,
+        "dggs_vert0_azimuth": DggsDegree,
         "geodetic_densify": float,
         "densification": int,
         "precision": int,
@@ -434,206 +438,98 @@ def dg_grid_meta(dggs: "Dggs") -> DggridMetafileT:
     """
     helper function to generate the metafile from a DGGS config
     """
-
-    metafile = []
-
-    if dggs.dggs_type in ['SUPERFUND', 'PLANETRISK']:
-        metafile.append(f"dggs_type {dggs.dggs_type}")
-
-    elif not dggs.dggs_type == 'CUSTOM':
-        metafile.append(f"dggs_type {dggs.dggs_type}")
-
-    elif dggs.dggs_type == 'CUSTOM':
+    if dggs.dggs_type == 'CUSTOM':
         raise ValueError('custom not yet implemented')
-
-    dggrid_par_lookup = {
-        'res': 'dggs_res_spec',
-        'precision': 'precision',
-        'area': 'dggs_res_specify_area',
-        'cls_val': 'dggs_res_specify_intercell_distance',
-        'mixed_aperture_level': 'dggs_num_aperture_4_res'
-    }
-    for res_opt in dggrid_par_lookup:
-        opt_val = dggs.get_par(res_opt, None)
-        if opt_val is not None:
-            metafile.append(f"{dggrid_par_lookup[res_opt]} {opt_val}")
-
+    dggs_meta = dggs.to_dict()
+    dggs_meta.update(specify_resolution(**dggs_meta))
+    dggs_meta.update(specify_topo_aperture(**dggs_meta))
+    dggs_meta.update(specify_orient_type_args(**dggs_meta))
+    metafile = [
+        f"{param} {val}"
+        for param, val in dggs_meta.items()
+        if val is not None
+    ]
     return metafile
 
 
-class Dggs(object):
-    """
-    class representing a DGGS grid system configuration, projection aperture etc
+@dataclasses.dataclass
+class Dggs:
+    dggs_type: DggsTypeT = 'CUSTOM'
+    projection: DggsProjectionT = 'ISEA'
+    aperture: DggsApertureT = 3
+    topology: DggsTopologyTypeT = 'HEXAGON'
+    resolution: int | None = None
+    precision: int = 7
+    densification: int | None = None
+    geodetic_densify: float | None = None
+    area: float | None = None
+    spacing: float | None = None
+    cls_val: float | None = None
+    resround: str | None = 'nearest'
+    metric: bool = True
+    show_info: bool = True
+    azimuth_deg: DggsDegree = 0.0
+    pole_lat_deg: DggsDegree = 58.28252559
+    pole_lon_deg: DggsDegree = 11.25
+    mixed_aperture_level: int | None = None
 
-        dggs_type: str     # = 'CUSTOM'
-        projection: str     # = 'ISEA'
-        aperture: int      #  = 3
-        topology: str      #  = 'HEXAGON'
-        res: int           #  = None
-        precision: int     #  = 7
-        area: float         #   = None
-        spacing: float       #  = None
-        cls_val: float        #     = None
-        resround: str      #  = 'nearest'
-        metric: bool        #  = True
-        show_info: bool     #  = True
-        azimuth_deg: float   #  = 0
-        pole_lat_deg: float  #  = 58.28252559
-        pole_lon_deg: float  # = 11.25
+    _hide_metafile = [
+        'metric',
+        'show_info',
+        'resround',
+        'spacing',
+        '_aliases',
+    ]
 
-        mixed_aperture_level:  # e.g. 5 -> dggs_num_aperture_4_res 5  for ISEA_43_H etc
-        metafile = []
-    """
+    # Aliases mapping: alias -> canonical
+    _aliases: dict[str, str] = dataclasses.field(default_factory=lambda: {
+        'dggs_type': 'dggs_type',
+        'dggs_proj': 'projection',
+        'dggs_aperture': 'aperture',
+        'dggs_topology': 'topology',
+        'dggs_res_spec': 'resolution',
+        'dggs_res_specify_area': 'area',
+        'dggs_res_specify_intercell_distance': 'cls_val',
+        'dggs_vert0_azimuth': 'azimuth_deg',
+        'dggs_vert0_lat': 'pole_lat_deg',
+        'dggs_vert0_lon': 'pole_lon_deg',
+        'dggs_num_aperture_4_res': 'mixed_aperture_level',
+        # Add more aliases as needed
+    }, init=False, repr=False)
 
-    def __init__(self, dggs_type: DggsTypeT, **kwargs) -> None:
-        self.dggs_type = dggs_type
+    def _resolve_key(self, key: str) -> str:
+        # If key is an alias, return canonical; else if it's a canonical, return as is
+        return self._aliases.get(key, key)
 
-        for key, value in kwargs.items():
-            self.set_par(key, value)
-
-
-    # def dgverify(self):
-    #     #See page 21 of documentation for further bounds
-    #     if not self.projection in ['ISEA','FULLER']:
-    #         raise ValueError('Unrecognised dggs projection')
-    #
-    #     if not self.topology in ['HEXAGON','DIAMOND','TRIANGLE']:
-    #         raise ValueError('Unrecognised dggs topology')
-    #     if not self.aperture in [ 3, 4 ]:
-    #         raise ValueError('Unrecognised dggs aperture')
-    #     if self.res < 0:
-    #         raise ValueError('dggs resolution must be >=0')
-    #     if self.res > 30:
-    #         raise ValueError('dggs resolution must be <=30')
-    #     if self.azimuth_deg < 0 or self.azimuth_deg > 360:
-    #         raise ValueError('dggs azimuth_deg must be in the range [0,360]')
-    #     if self.pole_lat_deg < -90  or self.pole_lat_deg > 90:
-    #         raise ValueError('dggs pole_lat_deg must be in the range [-90,90]')
-    #     if self.pole_lon_deg < -180 or self.pole_lon_deg > 180:
-    #         raise ValueError('dggs pole_lon_deg must be in the range [-180,180]')
-
-
-    def set_par(self, par_key, par_value):
-        if par_key == 'dggs_type':
-            self.dggs_type = par_value
-        if par_key == 'projection':
-            self.projection = par_value
-        if par_key == 'aperture':
-            self.aperture = par_value
-        if par_key == 'topology':
-            self.topology = par_value
-        if par_key in ['res', 'dggs_res_spec']:
-            self.res = par_value
-        if par_key == 'precision':
-            self.precision = par_value
-        if par_key in ['area', 'dggs_res_specify_area']:
-            self.area = par_value
-        if par_key == 'spacing':
-            self.spacing = par_value
-        if par_key == ['cls_val', 'dggs_res_specify_intercell_distance']:
-            self.cls_val = par_value
-        if par_key == 'resround':
-            self.resround = par_value
-        if par_key == 'metric':
-            self.metric = par_value
-        if par_key == 'show_info':
-            self.show_info = par_value
-        if par_key in ['azimuth_deg', 'dggs_vert0_azimuth']:
-            self.azimuth_deg = par_value
-        if par_key in ['pole_lat_deg', 'dggs_vert0_lat']:
-            self.pole_lat_deg = par_value
-        if par_key in ['pole_lon_deg', 'dggs_vert0_lon']:
-            self.pole_lon_deg = par_value
-        if par_key in ['mixed_aperture_level', 'dggs_num_aperture_4_res']:
-            self.mixed_aperture_level = par_value
-
+    def set_par(self, par_key: str, par_value: DggridMetaConfigParameterT):
+        key = self._resolve_key(par_key)
+        setattr(self, key, par_value)
         return self
 
+    def get_par(self, par_key: str, alternative=None) -> DggridMetaConfigParameterT | None:
+        key = self._resolve_key(par_key)
+        return getattr(self, key, alternative)
 
-    def get_par(self, par_key, alternative=None):
-        if par_key == 'dggs_type':
-            try:
-                return self.dggs_type
-            except AttributeError:
-                return alternative
-        if par_key == 'projection':
-            try:
-                return self.projection
-            except AttributeError:
-                return alternative
-        if par_key == 'aperture':
-            try:
-                return self.aperture
-            except AttributeError:
-                return alternative
-        if par_key == 'topology':
-            try:
-                return self.topology
-            except AttributeError:
-                return alternative
-        if par_key == 'res':
-            try:
-                return self.res
-            except AttributeError:
-                return alternative
-        if par_key == 'precision':
-            try:
-                return self.precision
-            except AttributeError:
-                return alternative
-        if par_key == 'area':
-            try:
-                return self.area
-            except AttributeError:
-                return alternative
-        if par_key == 'spacing':
-            try:
-                return self.spacing
-            except AttributeError:
-                return alternative
-        if par_key == 'cls_val':
-            try:
-                return self.cls_val
-            except AttributeError:
-                return alternative
-        if par_key == 'resround':
-            try:
-                return self.resround
-            except AttributeError:
-                return alternative
-        if par_key == 'metric':
-            try:
-                return self.metric
-            except AttributeError:
-                return alternative
-        if par_key == 'show_info':
-            try:
-                return self.show_info
-            except AttributeError:
-                return alternative
-        if par_key == 'azimuth_deg':
-            try:
-                return self.azimuth_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'pole_lat_deg':
-            try:
-                return self.pole_lat_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'pole_lon_deg':
-            try:
-                return self.pole_lon_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'mixed_aperture_level':
-            try:
-                return self.mixed_aperture_level
-            except AttributeError:
-                return alternative
-        else:
-            return alternative
+    def to_dict(self) -> dict[str, DggridMetaConfigParameterT]:
+        # use the first alias with 'dggs_' prefix if available, or use canonical name
+        # Build reverse mapping: canonical -> [aliases]
+        result = {}
+        reverse_aliases = {}
+        for alias, canonical in self._aliases.items():
+            reverse_aliases.setdefault(canonical, []).append(alias)
+        for field_name in self.__dataclass_fields__:
+            if field_name in self._hide_metafile:
+                continue
+            value = getattr(self, field_name)
+            alias_list = reverse_aliases.get(field_name, [])
+            dggs_alias = next((a for a in alias_list if a.startswith('dggs_')), None)
+            key = dggs_alias if dggs_alias else field_name
+            result[key] = value
+        return result
 
+    @property
+    def metafile(self) -> DggridMetafileT:
+        return copy.copy(dg_grid_meta(self))
 
     def dg_closest_res_to_area (self, area, resround,metric,show_info=True):
         raise ValueError('not yet implemented')
@@ -795,12 +691,10 @@ class DGGRID(abc.ABC):
             return -1
         return o.returncode
 
-
-    """
     ##############################################################################################
     # lower level API
     ##############################################################################################
-    """
+
     def dgapi_grid_gen(
         self,
         dggs: Dggs,
@@ -815,7 +709,7 @@ class DGGRID(abc.ABC):
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
-        dggs_config_meta = dg_grid_meta(dggs)
+        dggs_config_meta = dggs.metafile
 
         for cmd in dggs_config_meta:
             metafile.append(cmd)
@@ -1235,11 +1129,10 @@ class DGGRID(abc.ABC):
 
         return cellsNew
 
-    """
     #################################################################################
     # Higher level API
     #################################################################################
-    """
+
     def grid_stats_table(
         self,
         dggs_type: DggsTypeT,
@@ -2021,9 +1914,9 @@ def specify_orient_type_args(
     # use official DGGRID parameter names to map directly by keyword unpacking
     # note: first 3 are placed in the same order as originals to handle positional invocation seamlessly
     dggs_orient_specify_type=None,
-    dggs_vert0_lon=11.25,
-    dggs_vert0_lat=58.28252559,
-    dggs_vert0_azimuth=0.0,
+    dggs_vert0_lon: DggsDegree = None,
+    dggs_vert0_lat: DggsDegree = None,
+    dggs_vert0_azimuth: DggsDegree = None,
     dggs_orient_rand_seed=42,
     # backward compatibility parameters
     orient_type=None,
@@ -2031,14 +1924,23 @@ def specify_orient_type_args(
 ) -> DggridMetaConfigT:
     dggs_orient_specify_type = dggs_orient_specify_type or orient_type
 
-    if dggs_orient_specify_type == 'SPECIFIED':
-        if dggs_vert0_lon < -180.0 or dggs_vert0_lon > 180.0:
-            raise ValueError('dggs_vert0_lon must be in range [-180,180]')
-        if dggs_vert0_lat < -90.0 or dggs_vert0_lat > 90.0:
-            raise ValueError('dggs_vert0_lat must be in range [-90,90]')
-        if dggs_vert0_azimuth < 0.0 or dggs_vert0_azimuth > 360.0:
-            raise ValueError('dggs_vert0_azimuth must be in range [0,360]')
+    if dggs_orient_specify_type == 'SPECIFIED' or any(
+        val is not None for val in [dggs_vert0_lon, dggs_vert0_lat, dggs_vert0_azimuth]
+    ):
+        if dggs_vert0_lon is not None:
+            dggs_vert0_lon_val = decimal.Decimal(dggs_vert0_lon)
+            if dggs_vert0_lon_val < -180.0 or dggs_vert0_lon_val > 180.0:
+                raise ValueError('dggs_vert0_lon must be in range [-180,180]')
+        if dggs_vert0_lat is not None:
+            dggs_vert0_lat_val = decimal.Decimal(dggs_vert0_lat)
+            if dggs_vert0_lat_val < -90.0 or dggs_vert0_lat_val > 90.0:
+                raise ValueError('dggs_vert0_lat must be in range [-90,90]')
+        if dggs_vert0_azimuth is not None:
+            dggs_vert0_azimuth_val = decimal.Decimal(dggs_vert0_azimuth)
+            if dggs_vert0_azimuth_val < 0.0 or dggs_vert0_azimuth_val > 360.0:
+                raise ValueError('dggs_vert0_azimuth must be in range [0,360]')
         return {
+            'dggs_orient_specify_type' : 'SPECIFIED',
             'dggs_vert0_lon' : dggs_vert0_lon,
             'dggs_vert0_lat' : dggs_vert0_lat,
             'dggs_vert0_azimuth' : dggs_vert0_azimuth
