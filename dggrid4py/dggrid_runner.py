@@ -186,6 +186,8 @@ output_extra_fields_v8 = {
 DggsOutputAddressTypeT = DggsOutputAddressTypeV7T | DggsOutputAddressTypeV8T
 DggsOutputCellLabelTypeT = DggsOutputCellLabelTypeV7T | DggsOutputCellLabelTypeV8T
 
+DggsCellOutputControlT = Literal["OUTPUT_ALL", "OUTPUT_OCCUPIED"]
+cell_output_controls = get_args(DggsCellOutputControlT)
 
 DggsInputAddressTypeT = Literal[
     'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
@@ -222,6 +224,9 @@ dggs_res_specify_types = get_args(DggsResSpecifyTypeT)
 
 DggsOrientSpecifyTypesT = Literal["SPECIFIED", "RANDOM", "REGION_CENTER"]
 dggs_orient_specify_types = get_args(DggsOrientSpecifyTypesT)
+
+DggsBinCoverageT = Literal["GLOBAL", "PARTIAL"]
+bin_coverages = get_args(DggsBinCoverageT)
 
 # specify the operation
 DggridOperationsT = Literal[
@@ -260,6 +265,7 @@ DggridMetaConfigT = TypedDict(
         "geodetic_densify": float,
         "densification": int,
         "precision": int,
+        "bin_coverage": DggsBinCoverageT,
         "clip_subset_type": DggsClipSubsetTypeT,
         "clip_cell_res": int,
         "clip_cell_addresses": str,
@@ -268,9 +274,15 @@ DggridMetaConfigT = TypedDict(
         "input_address_type": DggsInputAddressTypeT,
         "input_delimiter": str,
         "input_file_name": str,
+        "input_files": str,
+        "kml_default_color": str,
+        "kml_default_width": str,
+        "kml_description": str,
+        "kml_name": str,
         "cell_output_type": DggsFeatureOutputTypeT,
         "cell_output_gdal_format": str,
         "cell_output_file_name": str,
+        "cell_output_control": DggsCellOutputControlT,
         "collection_output_gdal_format": str,
         "collection_output_file_name": str,
         "children_output_type": DggsZoneRelationOutputTypeT,
@@ -284,12 +296,16 @@ DggridMetaConfigT = TypedDict(
         "output_hier_ndx_system": DggsOutputHierNdxSystemT,
         "output_hier_ndx_form": DggsOutputHierNdxFormT,
         "output_cell_label_type": DggsOutputCellLabelTypeT,
+        "output_count": bool,
+        "output_count_field_name": str,
         "output_delimiter": str,
         "output_file_name": str,
         "output_first_seqnum": int,
         "output_last_seqnum": int,
+        "max_cells_per_output_file": int,
         "shapefile_id_field_length": int,
         "update_frequency": int,
+        "verbosity": int,
         # unofficial, only to document (since commented in metafile)
         "#short_name": str,
         "#dggs_aperture": str,
@@ -1860,54 +1876,6 @@ class DGGRIDv8(DGGRID):
 """
 below is an earlier attempt on custom DGGS configuration, currently we only barely support the predefined DGGS_TYPES
 """
-
-parameters = (
-    'bin_coverage',
-    'cell_output_control',
-    'cell_output_file_name',
-    'cell_output_gdal_format',
-    'cell_output_type',
-    'children_output_file_name',
-    'children_output_type',
-    'clipper_scale_factor',
-    'clip_region_files',
-    'clip_subset_type',
-    'densification',
-    'dggrid_operation',
-    'dggs_aperture_sequence',
-    'dggs_aperture_type',
-    'dggs_num_aperture_4_res',
-    'dggs_proj',
-    'dggs_res_spec',
-    'dggs_res_specify_area',
-    'dggs_res_specify_rnd_down',
-    'dggs_res_specify_type',
-    'dggs_topology',
-    'dggs_type',
-    'geodetic_densify',
-    'input_address_type',
-    'input_delimiter',
-    'input_file_name',
-    'input_files',
-    'kml_default_color',
-    'kml_default_width',
-    'kml_description',
-    'kml_name',
-    'max_cells_per_output_file',
-    'neighbor_output_file_name',
-    'neighbor_output_type',
-    'output_address_type',
-    'output_count',
-    'output_delimiter',
-    'output_file_name',
-    'point_output_file_name',
-    'point_output_gdal_format',
-    'point_output_type',
-    'precision',
-    'shapefile_id_field_length',
-    'update_frequency',
-    'verbosity'
-)
 
 
 def specify_orient_type_args(
