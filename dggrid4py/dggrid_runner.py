@@ -363,6 +363,9 @@ def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
                 if res_opt in kwargs.keys():
                     dggs.set_par(res_opt, kwargs[res_opt])
 
+            if dggs_type == 'IGEO7':
+                dggs.set_par('aperture', 7)
+
         elif not dggs_type == 'CUSTOM':
 
             # if dggs_type == 'ISEA3H'
