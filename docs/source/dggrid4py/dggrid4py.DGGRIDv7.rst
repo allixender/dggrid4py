@@ -35,10 +35,3 @@
 
       ~DGGRIDv7.cells_for_geo_points
       ~DGGRIDv7.address_transform
-
-   
-   
-
-   
-   
-   

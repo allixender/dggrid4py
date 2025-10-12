@@ -13,7 +13,35 @@ To use dggrid4py, first install it using pip:
    (.venv) $ pip install dggrid4py
 
 
-You need the ddgrid tool compiled available on the system.
+You need the dggrid tool compiled available on the system.
+
+You can install dggrid from conda-forge:
+
+.. code-block:: console
+
+   (.venv) $ conda install -c conda-forge dggrid
+
+Or compile from source: https://github.com/sahrk/DGGRID
+
+
+Portable DGGRID binary
+----------------------
+
+If you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
+
+.. code:: python
+
+   from dggrid4py import tool
+
+   dggrid_exec = tool.get_portable_executable(".")
+   dggrid_instance_portable = DGGRIDv7(executable=dggrid_exec, working_dir='.', capture_logs=False, silent=True, has_gdal=False, tmp_geo_out_legacy=True, debug=False)
+
+
+
+.. _basic_usage:
+
+Basic Usage
+-----------
 
 Besides some lowlevel access influence the dggrid operations’ metafile
 creation, a few highlevel functions are integrated to work with the more
@@ -102,19 +130,10 @@ comfortable geopython libraries, like shapely and geopandas
    print(children.head(3))
 
 
-Portable DGGRID binary
-----------------------
+IGEO7 Usage
+-----------
 
-If you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
-
-.. code:: python
-
-   from dggrid4py import tool
-
-   dggrid_exec = tool.get_portable_executable(".")
-   dggrid_instance_portable = DGGRIDv7(executable=dggrid_exec, working_dir='.', capture_logs=False, silent=True, has_gdal=False, tmp_geo_out_legacy=True, debug=False)
-
-
+Link to IGEO7 description: :ref:`IGEO7 <IGEO7>`
 
 TODO
 ----
