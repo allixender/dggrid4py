@@ -24,6 +24,7 @@ Find the source repository on `GitHub <https://github.com/allixender/dggrid4py>`
 .. toctree::
 
    usage
+   IGEO7
    api
 
 
