@@ -12,4 +12,4 @@ from .dggrid_runner import DGGRIDv7, DGGRIDv8, Dggs, dgselect, dggs_types
 import dggrid4py.igeo7 as igeo7
 import dggrid4py.tool as tool
 
-__version__ = "0.4.2"
+__version__ = "0.5.0-dev"

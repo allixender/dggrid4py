@@ -1,7 +1,9 @@
 API
 ===
 
+- dggrid4py.DGGRID
 - dggrid4py.DGGRIDv7
+- dggrid4py.DGGRIDv8
 - dggrid4py.dggrid_runner
 - dggrid4py.interrupt
 - dggrid4py.igeo7
