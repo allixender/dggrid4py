@@ -9,7 +9,9 @@
 # Wai Tik Chan (wai.tik.chan@ut.ee)
 #
 import abc
-from pathlib import Path
+import copy
+import dataclasses
+import decimal
 import uuid
 import shutil
 import os
@@ -18,7 +20,8 @@ import subprocess
 import traceback
 import tempfile
 import warnings
-from typing import Dict, Iterable
+from pathlib import Path
+from typing import Iterable, Literal, Sequence, TypedDict, cast, get_args, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -27,9 +30,17 @@ import fiona
 import geopandas as gpd
 from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
+if TYPE_CHECKING:
+    # place here to avoid imposing 'shapely' if not installed, but supported interface
+    from geopandas.base import GeometryArray
+    from shapely.geometry.base import BaseGeometry  # noqa
+
+    AnyGeometry = BaseGeometry | GeometryArray
+
+
 fiona_drivers = fiona.supported_drivers
 
-# SHAPEFIL is included more natively in DGGRID than GeoJSON (esp. as clip_subset_type)
+# SHAPEFILE is included more natively in DGGRID than GeoJSON (esp. as clip_subset_type)
 def get_geo_out(legacy=True, has_gdal=True):
     if legacy is True and has_gdal is False:
         return { "driver": "ESRI Shapefile", "legacy_driver": "Shapefile", "ext": "shp"}
@@ -52,9 +63,8 @@ def get_geo_out(legacy=True, has_gdal=True):
 
 
 
-
 # specify a ISEA3H
-dggs_types = (
+DggsTypeT = Literal[
     'CUSTOM',  # parameters will be specified manually
     'SUPERFUND', # Superfund_500m grid
     'PLANETRISK',
@@ -71,10 +81,11 @@ dggs_types = (
     'FULLER4D', # FULLER projection with diamond cells and an aperture of 4
     'FULLER43H', # FULLER projection with hexagon cells and a mixed sequence of aperture 4 resolutions followed by aperture 3 resolutions
     'FULLER7H', # FULLER projection with hexagon cells and an aperture of 7
-)
+]
+dggs_types = get_args(DggsTypeT)
 
 # control grid generation
-clip_subset_types = (
+DggsClipSubsetTypeT = Literal[
     'SHAPEFILE',
     'WHOLE_EARTH',
     'GDAL',
@@ -82,19 +93,32 @@ clip_subset_types = (
     'SEQNUMS',
     'COARSE_CELLS',
     'INPUT_ADDRESS_TYPE'
-)
+]
+clip_subset_types = get_args(DggsClipSubsetTypeT)
 
 # specify the output
-cell_output_types = (
+DggsFeatureOutputTypeT = Literal[
     'AIGEN',
     'GDAL',
+    'GDAL_COLLECTION',
     'GEOJSON',
+    'KML',
     'SHAPEFILE',
     'NONE',
     'TEXT'
-)
+]
+cell_output_types = get_args(DggsFeatureOutputTypeT)
+point_output_types = get_args(DggsFeatureOutputTypeT)
 
-output_address_types_v7 = (
+DggsZoneRelationOutputTypeT = Literal[
+    'GDAL_COLLECTION',
+    'NONE',
+    'TEXT'
+]
+neighbor_output_types = get_args(DggsZoneRelationOutputTypeT)
+children_output_types = get_args(DggsZoneRelationOutputTypeT)
+
+DggsOutputAddressTypeV7T = Literal[
     'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
     'Q2DI', # quad number and (i, j) coordinates on that quad
     'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
@@ -104,16 +128,17 @@ output_address_types_v7 = (
     'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
     'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
     'AIGEN',  # Arc/Info Generate file format
-    'Z3', # hexadecimal characters index system Z3 especially usefull for ISEA3H
+    'Z3', # hexadecimal characters index system Z3 especially useful for ISEA3H
     'Z3_STRING',  # numerical digits representation of Z3 (as characters, not an integer)
-    'Z7', # hexadecimal characters index system Z7 especially usefull for ISEA7H, also in preset IGEO7
+    'Z7', # hexadecimal characters index system Z7 especially useful for ISEA7H, also in preset IGEO7
     'Z7_STRING', # numerical digits representation of Z7 (as characters, not an integer)
-    'ZORDER', # index system ZORDER especially usefull for ISEA3H, ISEA4H and mixed aperture
+    'ZORDER', # index system ZORDER especially useful for ISEA3H, ISEA4H and mixed aperture
     'ZORDER_STRING'  # numerical digits representation of ZORDER (as characters, not an integer)
-)
+]
+output_address_types_v7 = get_args(DggsOutputAddressTypeV7T)
 
 
-output_address_types_v8 = (
+DggsOutputAddressTypeV8T = Literal[
     'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
     'Q2DI', # quad number and (i, j) coordinates on that quad
     'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
@@ -124,36 +149,47 @@ output_address_types_v8 = (
     'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
     'AIGEN',  # Arc/Info Generate file format
     'HIERNDX',
-)
+]
+output_address_types_v8 = get_args(DggsOutputAddressTypeV8T)
 
-output_cell_label_type_v7 = (
+DggsOutputCellLabelTypeV7T = Literal[
     'GLOBAL_SEQUENCE',
     'ENUMERATION',
     'SUPERFUND'
-)
-output_cell_label_type_v8 = output_cell_label_type_v7 + (
+]
+output_cell_label_type_v7 = get_args(DggsOutputCellLabelTypeV7T)
+
+DggsOutputCellLabelTypeV8T = Literal[
+    'GLOBAL_SEQUENCE',
+    'ENUMERATION',
+    'SUPERFUND',
     'OUTPUT_ADDRESS_TYPE',
-)
+]
+output_cell_label_type_v8 = get_args(DggsOutputCellLabelTypeV8T)
 
 output_extra_fields_v7 = {
     'output_cell_label_type': output_cell_label_type_v7
 }
 
+DggsOutputHierNdxSystemT = Literal['Z3', 'Z7', 'ZORDER']
+output_hier_ndx_systems = get_args(DggsOutputHierNdxSystemT)
+
+DggsOutputHierNdxFormT = Literal['INT64', 'DIGIT_STRING']
+output_hier_ndx_forms = get_args(DggsOutputHierNdxFormT)
+
 output_extra_fields_v8 = {
     'output_cell_label_type': output_cell_label_type_v8,
-    'output_hier_ndx_system': [
-        'Z3',
-        'Z7',
-        'ZORDER'
-    ],
-    'output_hier_ndx_form': [
-        'INT64',
-        'DIGIT_STRING'
-    ]
+    'output_hier_ndx_system': output_hier_ndx_systems,
+    'output_hier_ndx_form': output_hier_ndx_forms,
 }
 
+DggsOutputAddressTypeT = DggsOutputAddressTypeV7T | DggsOutputAddressTypeV8T
+DggsOutputCellLabelTypeT = DggsOutputCellLabelTypeV7T | DggsOutputCellLabelTypeV8T
 
-input_address_types = (
+DggsCellOutputControlT = Literal["OUTPUT_ALL", "OUTPUT_OCCUPIED"]
+cell_output_controls = get_args(DggsCellOutputControlT)
+
+DggsInputAddressTypeT = Literal[
     'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
     'Q2DI', # quad number and (i, j) coordinates on that quad
     'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
@@ -161,30 +197,130 @@ input_address_types = (
     'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
     'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
     'AIGEN',  # Arc/Info Generate file format
-    'Z3', # hexadecimal characters index system Z3 especially usefull for ISEA3H
+    'Z3', # hexadecimal characters index system Z3 especially useful for ISEA3H
     'Z3_STRING',  # numerical digits representation of Z3 (as characters, not an integer)
-    'Z7', # hexadecimal characters index system Z7 especially usefull for ISEA7H, also in preset IGEO7
+    'Z7', # hexadecimal characters index system Z7 especially useful for ISEA7H, also in preset IGEO7
     'Z7_STRING', # numerical digits representation of Z7 (as characters, not an integer)
-    'ZORDER', # index system ZORDER especially usefull for ISEA3H, ISEA4H and mixed aperture
+    'ZORDER', # index system ZORDER especially useful for ISEA3H, ISEA4H and mixed aperture
     'ZORDER_STRING'  # numerical digits representation of ZORDER (as characters, not an integer)
-)
+]
+input_address_types = get_args(DggsInputAddressTypeT)
 
 ### CUSTOM args
-dggs_projections = ( "ISEA", "FULLER")
+DggsProjectionT = Literal["ISEA", "FULLER"]
+dggs_projections = get_args(DggsProjectionT)
 
-dggs_topologies = ( 'HEXAGON', 'TRIANGLE', 'DIAMOND')
-dggs_aperture_types = ( 'PURE', 'MIXED43', 'SEQUENCE')
+DggsTopologyTypeT = Literal['HEXAGON', 'TRIANGLE', 'DIAMOND']
+dggs_topologies = get_args(DggsTopologyTypeT)
 
-dggs_res_specify_types = ( "SPECIFIED", "CELL_AREA", "INTERCELL_DISTANCE" )
-dggs_orient_specify_types = ( 'SPECIFIED', 'RANDOM', 'REGION_CENTER' )
+DggsApertureT = Literal[3, 4, 7]
+dggs_apertures = get_args(DggsApertureT)
+
+DggsApertureTypeT = Literal['PURE', 'MIXED43', 'SEQUENCE']
+dggs_aperture_types = get_args(DggsApertureTypeT)
+
+DggsResSpecifyTypeT = Literal["SPECIFIED", "CELL_AREA", "INTERCELL_DISTANCE"]
+dggs_res_specify_types = get_args(DggsResSpecifyTypeT)
+
+DggsOrientSpecifyTypesT = Literal["SPECIFIED", "RANDOM", "REGION_CENTER"]
+dggs_orient_specify_types = get_args(DggsOrientSpecifyTypesT)
+
+DggsBinCoverageT = Literal["GLOBAL", "PARTIAL"]
+bin_coverages = get_args(DggsBinCoverageT)
 
 # specify the operation
-dggrid_operations = (
+DggridOperationsT = Literal[
     'GENERATE_GRID',
     'TRANSFORM_POINTS',
     'BIN_POINT_VALS',
     'BIN_POINT_PRESENCE',
     'OUTPUT_STATS'
+]
+dggrid_operations = get_args(DggridOperationsT)
+
+DggsDegree = decimal.Decimal | float | str   # allow string to hardcode strictly
+
+DggridMetaConfigParameterT = str | float | int
+DggridMetaConfigT = TypedDict(
+    "DggridMetaConfigT",
+    {
+        "dggrid_operation": DggridOperationsT,
+        "dggs_type": DggsTypeT,
+        "dggs_aperture": DggsApertureT,
+        "dggs_aperture_type": DggsApertureTypeT,
+        "dggs_aperture_sequence": str,
+        "dggs_num_aperture_4_res": int,
+        "dggs_proj": DggsProjectionT,
+        "dggs_topology": DggsTopologyTypeT,
+        "dggs_res_spec": int,
+        "dggs_res_specify_area": float,
+        "dggs_res_specify_type": DggsResSpecifyTypeT,
+        "dggs_res_specify_rnd_down": bool,
+        "dggs_res_specify_intercell_distance": float,
+        "dggs_orient_specify_type": DggsOrientSpecifyTypesT,
+        "dggs_orient_rand_seed": int,
+        "dggs_vert0_lon": DggsDegree,
+        "dggs_vert0_lat": DggsDegree,
+        "dggs_vert0_azimuth": DggsDegree,
+        "geodetic_densify": float,
+        "densification": int,
+        "precision": int,
+        "bin_coverage": DggsBinCoverageT,
+        "clip_subset_type": DggsClipSubsetTypeT,
+        "clip_cell_res": int,
+        "clip_cell_addresses": str,
+        "clip_region_files": str,
+        "clipper_scale_factor": float,
+        "input_address_type": DggsInputAddressTypeT,
+        "input_delimiter": str,
+        "input_file_name": str,
+        "input_files": str,
+        "kml_default_color": str,
+        "kml_default_width": str,
+        "kml_description": str,
+        "kml_name": str,
+        "cell_output_type": DggsFeatureOutputTypeT,
+        "cell_output_gdal_format": str,
+        "cell_output_file_name": str,
+        "cell_output_control": DggsCellOutputControlT,
+        "collection_output_gdal_format": str,
+        "collection_output_file_name": str,
+        "children_output_type": DggsZoneRelationOutputTypeT,
+        "children_output_file_name": str,
+        "neighbor_output_type": DggsZoneRelationOutputTypeT,
+        "neighbor_output_file_name": str,
+        "point_output_type": DggsFeatureOutputTypeT,
+        "point_output_gdal_format": str,
+        "point_output_file_name": str,
+        "output_address_type": DggsOutputAddressTypeT,
+        "output_hier_ndx_system": DggsOutputHierNdxSystemT,
+        "output_hier_ndx_form": DggsOutputHierNdxFormT,
+        "output_cell_label_type": DggsOutputCellLabelTypeT,
+        "output_count": bool,
+        "output_count_field_name": str,
+        "output_delimiter": str,
+        "output_file_name": str,
+        "output_first_seqnum": int,
+        "output_last_seqnum": int,
+        "max_cells_per_output_file": int,
+        "shapefile_id_field_length": int,
+        "update_frequency": int,
+        "verbosity": int,
+        # unofficial, only to document (since commented in metafile)
+        "#short_name": str,
+        "#dggs_aperture": str,
+    },
+    total=False,
+)
+
+DggridMetafileT = list[str]  # concatenated 'parameter value' entries
+DggridApiOutputT = TypedDict(
+    "DggridApiOutputT",
+    {
+        "metafile": DggridMetafileT,
+        "output_conf": DggridMetaConfigT | dict[str, DggridMetaConfigParameterT],
+    },
+    total=True,
 )
 
 
@@ -199,7 +335,7 @@ def __getattr__(name):  # for backward compatibility helper/warning
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
-def dgselect(dggs_type, **kwargs):
+def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
     """
     helper function to create a DGGS config quickly
     """
@@ -227,6 +363,9 @@ def dgselect(dggs_type, **kwargs):
                 if res_opt in kwargs.keys():
                     dggs.set_par(res_opt, kwargs[res_opt])
 
+            if dggs_type == 'IGEO7':
+                dggs.set_par('aperture', 7)
+
         elif not dggs_type == 'CUSTOM':
 
             # if dggs_type == 'ISEA3H'
@@ -235,13 +374,13 @@ def dgselect(dggs_type, **kwargs):
             projection, aperture, topology = 'ISEA', 3, 'HEXAGON'
 
             if dggs_type.find('ISEA') > -1:
-                projection == 'ISEA'
+                projection = 'ISEA'
                 sub1 = dggs_type.replace('ISEA','')
                 topology = topo_dict[sub1[-1]]
                 aperture = int(sub1.replace(sub1[-1], ''))
 
             elif dggs_type.find('FULLER') > -1:
-                projection == 'FULLER'
+                projection = 'FULLER'
                 sub1 = dggs_type.replace('FULLER','')
                 topology = topo_dict[sub1[-1]]
                 aperture = int(sub1.replace(sub1[-1], ''))
@@ -289,9 +428,9 @@ def dgselect(dggs_type, **kwargs):
             # dggs_topologies = ( 'HEXAGON', 'TRIANGLE', 'DIAMOND')
             # dggs_aperture_types = ( 'PURE', 'MIXED43', 'SEQUENCE')
 
-            # specify_topo_aperture(topology_type, aperture_type, aperture_res)
+            # specify_topo_aperture(topology_type, aperture_type, dggs_aperture_res)
             """
-            specify_topo_aperture(topology_type, aperture_type, aperture_res, dggs_num_aperture_4_res=0, dggs_aperture_sequence="333333333333")
+            specify_topo_aperture(topology_type, aperture_type, dggs_aperture_res, dggs_num_aperture_4_res=0, dggs_aperture_sequence="333333333333")
             """
 
             # dggs_orient_specify_types = ( 'SPECIFIED', 'RANDOM', 'REGION_CENTER' )
@@ -314,216 +453,102 @@ def dgselect(dggs_type, **kwargs):
     return dggs
 
 
-def dg_grid_meta(dggs):
+def dg_grid_meta(dggs: "Dggs") -> DggridMetafileT:
     """
     helper function to generate the metafile from a DGGS config
     """
-
-    dggrid_par_lookup = {
-        'res' : 'dggs_res_spec',
-        'precision': 'precision',
-        'area' : 'dggs_res_specify_area',
-        'cls_val' : 'dggs_res_specify_intercell_distance',
-        'mixed_aperture_level' : 'dggs_num_aperture_4_res'
-    }
-    metafile = []
-
-    if dggs.dggs_type in ['SUPERFUND', 'PLANETRISK']:
-        metafile.append(f"dggs_type {dggs.dggs_type}")
-
-    elif not dggs.dggs_type == 'CUSTOM':
-        metafile.append(f"dggs_type {dggs.dggs_type}")
-
-    elif dggs.dggs_type == 'CUSTOM':
+    if dggs.dggs_type == 'CUSTOM':
         raise ValueError('custom not yet implemented')
-
-    for res_opt in [ 'res', # dggs_res_spec
-                    'precision', # default 7
-                    'area', # dggs_res_specify_area
-                    'cls_val', # dggs_res_specify_intercell_distance
-                    'mixed_aperture_level'  # dggs_num_aperture_4_res 5
-                    ]:
-        if not dggs.get_par(res_opt, None) is None:
-            opt_val = dggs.get_par(res_opt, None)
-            if not opt_val is None:
-                metafile.append(f"{dggrid_par_lookup[res_opt]} {opt_val}")
-
+    dggs_meta = dggs.to_dict()
+    dggs_meta.update(specify_resolution(**dggs_meta))
+    dggs_meta.update(specify_topo_aperture(**dggs_meta))
+    dggs_meta.update(specify_orient_type_args(**dggs_meta))
+    metafile = [
+        f"{param} {val}"
+        for param, val in dggs_meta.items()
+        if val is not None
+    ]
     return metafile
 
 
-class Dggs(object):
-    """
-    class representing a DGGS grid system configuration, projection aperture etc
+@dataclasses.dataclass
+class Dggs:
+    dggs_type: DggsTypeT = 'CUSTOM'
+    projection: DggsProjectionT = 'ISEA'
+    aperture: DggsApertureT = 3
+    topology: DggsTopologyTypeT = 'HEXAGON'
+    resolution: int | None = None
+    precision: int = 7
+    densification: int | None = None
+    geodetic_densify: float | None = None
+    area: float | None = None
+    spacing: float | None = None
+    cls_val: float | None = None
+    resround: str | None = 'nearest'
+    metric: bool = True
+    show_info: bool = True
+    azimuth_deg: DggsDegree = 0.0
+    pole_lat_deg: DggsDegree = 58.28252559
+    pole_lon_deg: DggsDegree = 11.25
+    mixed_aperture_level: int | None = None
 
-        dggs_type: str     # = 'CUSTOM'
-        projection: str     # = 'ISEA'
-        aperture: int      #  = 3
-        topology: str      #  = 'HEXAGON'
-        res: int           #  = None
-        precision: int     #  = 7
-        area: float         #   = None
-        spacing: float       #  = None
-        cls_val: float        #     = None
-        resround: str      #  = 'nearest'
-        metric: bool        #  = True
-        show_info: bool     #  = True
-        azimuth_deg: float   #  = 0
-        pole_lat_deg: float  #  = 58.28252559
-        pole_lon_deg: float  # = 11.25
+    _hide_metafile = [
+        'metric',
+        'show_info',
+        'resround',
+        'spacing',
+        '_aliases',
+    ]
 
-        mixed_aperture_level:  # e.g. 5 -> dggs_num_aperture_4_res 5  for ISEA_43_H etc
-        metafile = []
-    """
+    # Aliases mapping: alias -> canonical
+    _aliases: dict[str, str] = dataclasses.field(default_factory=lambda: {
+        'dggs_type': 'dggs_type',
+        'dggs_proj': 'projection',
+        'dggs_aperture': 'aperture',
+        'dggs_topology': 'topology',
+        'dggs_res_spec': 'resolution',
+        'dggs_res_specify_area': 'area',
+        'dggs_res_specify_intercell_distance': 'cls_val',
+        'dggs_vert0_azimuth': 'azimuth_deg',
+        'dggs_vert0_lat': 'pole_lat_deg',
+        'dggs_vert0_lon': 'pole_lon_deg',
+        'dggs_num_aperture_4_res': 'mixed_aperture_level',
+        # Add more aliases as needed
+    }, init=False, repr=False)
 
-    def __init__(self, dggs_type, **kwargs):
-        self.dggs_type = dggs_type
+    def _resolve_key(self, key: str) -> str:
+        # If key is an alias, return canonical; else if it's a canonical, return as is
+        return self._aliases.get(key, key)
 
-        for key, value in kwargs.items():
-            self.set_par(key, value)
-
-
-    # def dgverify(self):
-    #     #See page 21 of documentation for further bounds
-    #     if not self.projection in ['ISEA','FULLER']:
-    #         raise ValueError('Unrecognised dggs projection')
-    #
-    #     if not self.topology in ['HEXAGON','DIAMOND','TRIANGLE']:
-    #         raise ValueError('Unrecognised dggs topology')
-    #     if not self.aperture in [ 3, 4 ]:
-    #         raise ValueError('Unrecognised dggs aperture')
-    #     if self.res < 0:
-    #         raise ValueError('dggs resolution must be >=0')
-    #     if self.res > 30:
-    #         raise ValueError('dggs resolution must be <=30')
-    #     if self.azimuth_deg < 0 or self.azimuth_deg > 360:
-    #         raise ValueError('dggs azimuth_deg must be in the range [0,360]')
-    #     if self.pole_lat_deg < -90  or self.pole_lat_deg > 90:
-    #         raise ValueError('dggs pole_lat_deg must be in the range [-90,90]')
-    #     if self.pole_lon_deg < -180 or self.pole_lon_deg > 180:
-    #         raise ValueError('dggs pole_lon_deg must be in the range [-180,180]')
-
-
-    def set_par(self, par_key, par_value):
-        if par_key == 'dggs_type':
-            self.dggs_type = par_value
-        if par_key == 'projection':
-            self.projection = par_value
-        if par_key == 'aperture':
-            self.aperture = par_value
-        if par_key == 'topology':
-            self.topology = par_value
-        if par_key == 'res':
-            self.res = par_value
-        if par_key == 'precision':
-            self.precision = par_value
-        if par_key == 'area':
-            self.area = par_value
-        if par_key == 'spacing':
-            self.spacing = par_value
-        if par_key == 'cls_val':
-            self.cls_val = par_value
-        if par_key == 'resround':
-            self.resround = par_value
-        if par_key == 'metric':
-            self.metric = par_value
-        if par_key == 'show_info':
-            self.show_info = par_value
-        if par_key == 'azimuth_deg':
-            self.azimuth_deg = par_value
-        if par_key == 'pole_lat_deg':
-            self.pole_lat_deg = par_value
-        if par_key == 'pole_lon_deg':
-            self.pole_lon_deg = par_value
-        if par_key == 'mixed_aperture_level':
-            self.mixed_aperture_level = par_value
-
+    def set_par(self, par_key: str, par_value: DggridMetaConfigParameterT):
+        key = self._resolve_key(par_key)
+        setattr(self, key, par_value)
         return self
 
+    def get_par(self, par_key: str, alternative=None) -> DggridMetaConfigParameterT | None:
+        key = self._resolve_key(par_key)
+        return getattr(self, key, alternative)
 
-    def get_par(self, par_key, alternative=None):
-        if par_key == 'dggs_type':
-            try:
-                return self.dggs_type
-            except AttributeError:
-                return alternative
-        if par_key == 'projection':
-            try:
-                return self.projection
-            except AttributeError:
-                return alternative
-        if par_key == 'aperture':
-            try:
-                return self.aperture
-            except AttributeError:
-                return alternative
-        if par_key == 'topology':
-            try:
-                return self.topology
-            except AttributeError:
-                return alternative
-        if par_key == 'res':
-            try:
-                return self.res
-            except AttributeError:
-                return alternative
-        if par_key == 'precision':
-            try:
-                return self.precision
-            except AttributeError:
-                return alternative
-        if par_key == 'area':
-            try:
-                return self.area
-            except AttributeError:
-                return alternative
-        if par_key == 'spacing':
-            try:
-                return self.spacing
-            except AttributeError:
-                return alternative
-        if par_key == 'cls_val':
-            try:
-                return self.cls_val
-            except AttributeError:
-                return alternative
-        if par_key == 'resround':
-            try:
-                return self.resround
-            except AttributeError:
-                return alternative
-        if par_key == 'metric':
-            try:
-                return self.metric
-            except AttributeError:
-                return alternative
-        if par_key == 'show_info':
-            try:
-                return self.show_info
-            except AttributeError:
-                return alternative
-        if par_key == 'azimuth_deg':
-            try:
-                return self.azimuth_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'pole_lat_deg':
-            try:
-                return self.pole_lat_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'pole_lon_deg':
-            try:
-                return self.pole_lon_deg
-            except AttributeError:
-                return alternative
-        if par_key == 'mixed_aperture_level':
-            try:
-                return self.mixed_aperture_level
-            except AttributeError:
-                return alternative
-        else:
-            return alternative
+    def to_dict(self) -> dict[str, DggridMetaConfigParameterT]:
+        # use the first alias with 'dggs_' prefix if available, or use canonical name
+        # Build reverse mapping: canonical -> [aliases]
+        result = {}
+        reverse_aliases = {}
+        for alias, canonical in self._aliases.items():
+            reverse_aliases.setdefault(canonical, []).append(alias)
+        for field_name in self.__dataclass_fields__:
+            if field_name in self._hide_metafile:
+                continue
+            value = getattr(self, field_name)
+            alias_list = reverse_aliases.get(field_name, [])
+            dggs_alias = next((a for a in alias_list if a.startswith('dggs_')), None)
+            key = dggs_alias if dggs_alias else field_name
+            result[key] = value
+        return result
 
+    @property
+    def metafile(self) -> DggridMetafileT:
+        return copy.copy(dg_grid_meta(self))
 
     def dg_closest_res_to_area (self, area, resround,metric,show_info=True):
         raise ValueError('not yet implemented')
@@ -551,7 +576,7 @@ class DGGRID(abc.ABC):
         self.executable = Path(executable).resolve()
         self.capture_logs=capture_logs
         self.silent=silent
-        self.last_run_succesful = False
+        self.last_run_successful = False
         self.last_run_logs = ''
         self.last_ops_meta = {}
         self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy)
@@ -570,16 +595,19 @@ class DGGRID(abc.ABC):
 
     @property
     @abc.abstractmethod
-    def output_address_types(self) -> Iterable[str]:
+    def output_address_types(self) -> Iterable[DggsOutputAddressTypeT]:
         raise NotImplementedError
 
     @property
     @abc.abstractmethod
-    def output_extra_fields(self) -> Dict[str, Iterable[str]]:
+    def output_extra_fields(self) -> dict[str, Iterable[DggridMetaConfigParameterT]]:
         raise NotImplementedError
 
-    def check_output_extra_fields(self, output_conf: Dict[str, str]) -> Dict[str, str]:
-        output_conf_extra = {}
+    def check_output_extra_fields(
+        self,
+        output_conf: DggridMetaConfigT | dict[str, DggridMetaConfigParameterT],
+    ) -> DggridMetaConfigT:
+        output_conf_extra: DggridMetaConfigT = {}
         for conf, allowed in self.output_extra_fields.items():
             if conf in output_conf:
                 out = output_conf[conf]
@@ -631,6 +659,7 @@ class DGGRID(abc.ABC):
 
         # subprocess.call / Popen swat_exec, check if return val is 0 or not
         # yield logs?
+        o = None
         try:
             os.chdir(self.working_dir)
 
@@ -639,7 +668,7 @@ class DGGRID(abc.ABC):
                     metafile.write(line + '\n')
 
             self.last_ops_meta = dggs_meta_ops
-            if self.debug is True:
+            if self.debug:
                 print(dggs_meta_ops)
 
             logs = []
@@ -655,14 +684,14 @@ class DGGRID(abc.ABC):
                         logs.append(line.strip())
 
             if o.returncode == 0:
-                self.last_run_succesful = True
-                if self.debug is False:
+                self.last_run_successful = True
+                if not self.debug:
                     try:
                         os.remove( 'metafile_' + str(tmp_id) )
                     except Exception:
                         pass
             else:
-                self.last_run_succesful = False
+                self.last_run_successful = False
 
             if self.capture_logs:
                 self.last_run_logs = '\n'.join(logs)
@@ -670,22 +699,27 @@ class DGGRID(abc.ABC):
                 self.last_run_logs = ''
 
         except Exception as e:
-            self.last_run_succesful = False
+            self.last_run_successful = False
             print(repr(e))
             traceback.print_exc(file=sys.stdout)
             self.last_run_logs = repr(e)
         finally:
             os.chdir(curdir)
 
+        if not o:
+            return -1
         return o.returncode
 
-
-    """
     ##############################################################################################
     # lower level API
     ##############################################################################################
-    """
-    def dgapi_grid_gen(self, dggs, subset_conf, output_conf):
+
+    def dgapi_grid_gen(
+        self,
+        dggs: Dggs,
+        subset_conf: DggridMetaConfigT,
+        output_conf: DggridMetaConfigT,  # contrary to other methods, it should be pre-resolved to avoid duplicate checks
+    ) -> DggridApiOutputT:
         """
         Grid Generation. Generate the cells of a DGG, either covering the complete surface of the earth or covering only a
         specific set of regions on the earth’s surface.
@@ -694,7 +728,7 @@ class DGGRID(abc.ABC):
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
-        dggs_config_meta = dg_grid_meta(dggs)
+        dggs_config_meta = dggs.metafile
 
         for cmd in dggs_config_meta:
             metafile.append(cmd)
@@ -744,10 +778,17 @@ class DGGRID(abc.ABC):
 
         # cell_output_types
         if 'cell_output_type' in output_conf.keys():
-            if output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT'] and not output_conf['cell_output_file_name'] is None:
+            if (
+                output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT']
+                and output_conf['cell_output_file_name'] is not None
+            ):
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
-            elif output_conf['cell_output_type'] in [ 'GDAL'] and not output_conf['cell_output_gdal_format'] is None and not output_conf['cell_output_file_name'] is None:
+            elif (
+                output_conf['cell_output_type'] in ['GDAL', 'GDAL_COLLECTION'] and
+                output_conf['cell_output_gdal_format'] is not None and
+                output_conf['cell_output_file_name'] is not None
+            ):
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
             elif output_conf['cell_output_type'] in [ 'NONE']:
@@ -755,18 +796,53 @@ class DGGRID(abc.ABC):
 
             # check join cell grid params add to metafile
 
+        # collection output
+        if 'collection_output_file_name' in output_conf:
+            metafile.append("collection_output_file_name " + str(output_conf['collection_output_file_name']))
+        if 'collection_output_gdal_format' in output_conf:
+            metafile.append("collection_output_gdal_format " + str(output_conf['collection_output_gdal_format']))
+
         # point_output_types
         if 'point_output_type' in output_conf.keys():
-            if output_conf['point_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT'] and not output_conf['point_output_file_name'] is None:
+            if (
+                output_conf['point_output_type'] in ['SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT'] and
+                output_conf['point_output_file_name'] is not None
+            ):
                 for elem in filter(lambda x: x.startswith('point_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
-            elif output_conf['point_output_type'] in [ 'GDAL'] and not output_conf['point_output_gdal_format'] is None and not output_conf['point_output_file_name'] is None:
+            elif (
+                output_conf['point_output_type'] in ['GDAL', 'GDAL_COLLECTION'] and
+                output_conf['point_output_gdal_format'] is not None and
+                output_conf['point_output_file_name'] is not None
+            ):
                 for elem in filter(lambda x: x.startswith('point_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
             elif output_conf['point_output_type'] in [ 'NONE']:
                 metafile.append("point_output_type NONE")
 
-            # check join point grid params add to metafile
+        # neighbor_output_types
+        if 'neighbor_output_type' in output_conf.keys():
+            if (
+                output_conf['neighbor_output_type'] in neighbor_output_types and
+                output_conf['neighbor_output_file_name'] is not None
+            ):
+                for elem in filter(lambda x: x.startswith('neighbor_output_'), output_conf.keys()):
+                    metafile.append(f"{elem} " + str(output_conf[elem]))
+            elif output_conf['neighbor_output_type'] in ['NONE']:
+                metafile.append("neighbor_output_type NONE")
+
+        # children_output_types
+        if 'children_output_type' in output_conf.keys():
+            if (
+                output_conf['children_output_type'] in children_output_types and
+                output_conf['children_output_file_name'] is not None
+            ):
+                for elem in filter(lambda x: x.startswith('children_output_'), output_conf.keys()):
+                    metafile.append(f"{elem} " + str(output_conf[elem]))
+            elif output_conf['children_output_type'] in ['NONE']:
+                metafile.append("children_output_type NONE")
+
+        # check join point grid params add to metafile
 
         if 'output_address_type' in output_conf.keys() and output_conf.get('output_address_type', 'NOPE') in self.output_address_types:
             metafile.append("output_address_type " + output_conf['output_address_type'])
@@ -776,8 +852,8 @@ class DGGRID(abc.ABC):
 
         result = self.run(metafile)
 
-        if not result == 0:
-            if self.capture_logs == True:
+        if result != 0:
+            if self.capture_logs:
                 message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
                 raise ValueError(message)
             else:
@@ -787,7 +863,12 @@ class DGGRID(abc.ABC):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def dgapi_grid_transform(self, dggs, subset_conf, **output_conf_extra):
+    def dgapi_grid_transform(
+        self,
+        dggs: Dggs,
+        subset_conf: DggridMetaConfigT,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> DggridApiOutputT:
         """
         Address Conversion. Transform a file of locations from one address form (such as longitude/latitude) to another (such as DGG cell indexes).
         """
@@ -812,6 +893,9 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
 
         # transform output_types
         if (
@@ -831,8 +915,8 @@ class DGGRID(abc.ABC):
 
         result = self.run(metafile)
 
-        if not result == 0:
-            if self.capture_logs == True:
+        if result != 0:
+            if self.capture_logs:
                 message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
                 raise ValueError(message)
             else:
@@ -842,7 +926,12 @@ class DGGRID(abc.ABC):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def dgapi_point_value_binning(self, dggs, subset_conf, **output_conf_extra):
+    def dgapi_point_value_binning(
+        self,
+        dggs: Dggs,
+        subset_conf: DggridMetaConfigT,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> DggridApiOutputT:
         """
         Point Value Binning. Bin a set of floating-point values associated with point locations into the cells of a DGG,
         by assigning to each DGG cell the arithmetic mean of the values which are contained in that cell.
@@ -891,6 +980,9 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
 
         # transform output_types
         if (
@@ -910,8 +1002,8 @@ class DGGRID(abc.ABC):
 
         result = self.run(metafile)
 
-        if not result == 0:
-            if self.capture_logs == True:
+        if result != 0:
+            if self.capture_logs:
                 message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
                 raise ValueError(message)
             else:
@@ -921,7 +1013,12 @@ class DGGRID(abc.ABC):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def dgapi_pres_binning(self, dggs, subset_conf, **output_conf_extra):
+    def dgapi_pres_binning(
+        self,
+        dggs: Dggs,
+        subset_conf: DggridMetaConfigT,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> DggridApiOutputT:
         """
         Presence/Absence Binning. Given a set of input files, each containing point locations associated with a particular class, DGGRID outputs,
         for each cell of a DGG, a vector indicating whether or not each class is present in that cell.
@@ -947,6 +1044,9 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
 
         # transform output_types
         if (
@@ -966,8 +1066,8 @@ class DGGRID(abc.ABC):
 
         result = self.run(metafile)
 
-        if not result == 0:
-            if self.capture_logs == True:
+        if result != 0:
+            if self.capture_logs:
                 message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
                 raise ValueError(message)
             else:
@@ -977,17 +1077,10 @@ class DGGRID(abc.ABC):
         return { 'metafile': metafile, 'output_conf': output_conf }
 
 
-    def dgapi_grid_stats(self, dggs):
+    def dgapi_grid_stats(self, dggs: Dggs) -> DggridApiOutputT:
         """
         Output Grid Statistics. Output a table of grid characteristics for the specified DGG.
         """
-        import copy
-
-        np_table_switch = True
-        try:
-            import numpy as np
-        except ImportError:
-            np_table_switch = False
 
         dggrid_operation = 'OUTPUT_STATS'
         metafile = []
@@ -998,14 +1091,14 @@ class DGGRID(abc.ABC):
         for cmd in dggs_config_meta:
             metafile.append(cmd)
 
-        # we need to capturethe logs for this one:
+        # we need to capture the logs for this one:
         save_state = copy.copy(self.capture_logs)
         self.capture_logs = True
 
         result = self.run(metafile)
 
-        if not result == 0:
-            if self.capture_logs == True:
+        if result != 0:
+            if self.capture_logs:
                 message = f"some error happened under the hood of dggrid (exit code {result}): " + self.last_run_logs
                 raise ValueError(message)
             else:
@@ -1020,21 +1113,17 @@ class DGGRID(abc.ABC):
                 earth_line_switch = True
                 earth_radius_info = line.strip().replace(',','')
 
-            if earth_line_switch == True:
+            if earth_line_switch:
                 table.append(line.strip().replace(',',''))
 
         # set capture logs back to original
         self.capture_logs = save_state
 
-        if np_table_switch == True:
-            np_table = np.genfromtxt(table, skip_header=3)
-
-            return { 'metafile': metafile, 'output_conf': {'stats_output': np_table, 'earth_radius_info': earth_radius_info } }
-        else:
-            return { 'metafile': metafile, 'output_conf': {'stats_output': table, 'earth_radius_info': earth_radius_info } }
+        np_table = np.genfromtxt(table, skip_header=3)
+        return { 'metafile': metafile, 'output_conf': {'stats_output': np_table, 'earth_radius_info': earth_radius_info } }
 
 
-    def post_process_split_dateline(self, gdf):
+    def post_process_split_dateline(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         cellsNew = gdf.iloc[:0].copy()
         # if we get eventually binning working we will have dynamic additional column for the binned values
         # cols = dict({ (idx, field) for idx, field in enumerate(gdf.columns)})
@@ -1059,19 +1148,23 @@ class DGGRID(abc.ABC):
 
         return cellsNew
 
-    """
     #################################################################################
     # Higher level API
     #################################################################################
-    """
-    def grid_stats_table(self, dggs_type, resolution, mixed_aperture_level=None):
+
+    def grid_stats_table(
+        self,
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+    ) -> pd.DataFrame:
         """
-        generates the area and cell statististcs for the given DGGS from resolution 0 to the given resolution of the DGGS
+        generates the area and cell statistics for the given DGGS from resolution 0 to the given resolution of the DGGS
         """
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
         dggs_ops = self.dgapi_grid_stats(dggs)
-        if self.debug is True:
+        if self.debug:
             print(dggs_ops)
 
         df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
@@ -1083,37 +1176,49 @@ class DGGRID(abc.ABC):
         return df
 
 
-    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None, split_dateline=False,
-                                      output_address_type=None, **output_conf_extra):
+    def grid_cell_polygons_for_extent(
+        self,
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        clip_geom: "AnyGeometry" = None,
+        split_dateline: bool = False,
+        output_address_type: DggsOutputAddressTypeT | None = None,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> gpd.GeoDataFrame:
         """
-        generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
-            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+        generates a DGGS grid and returns all the cells as GeoDataFrame with geometry type Polygon
+            a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
-        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
-
+        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
         if not clip_geom is None and clip_geom.area > 0:
 
             clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
+            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'])
 
             subset_conf.update({
                 'clip_subset_type': 'GDAL',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
                 })
 
-            if self.has_gdal is False:
+            if not self.has_gdal:
                 subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
+                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
             'cell_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
@@ -1121,9 +1226,9 @@ class DGGRID(abc.ABC):
             **output_extras
         }
 
-        if self.has_gdal is False:
+        if not self.has_gdal:
             output_conf.update({
-                'cell_output_type': self.tmp_geo_out['legacy_driver'].upper(),
+                'cell_output_type': cast(DggsFeatureOutputTypeT, self.tmp_geo_out['legacy_driver'].upper()),
                 'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('cell_output_gdal_format', None)
@@ -1131,18 +1236,19 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
-        if self.debug is True:
+        if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( ( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve(), driver=self.tmp_geo_out['driver'] )
+        path = Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}"
+        gdf = gpd.read_file(path.resolve(), driver=self.tmp_geo_out['driver'])
 
-        if self.debug is False:
+        if not self.debug:
             try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
+                os.remove(path)
                 if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
                     for ext in ['dbf', 'prj', 'shx', 'cpg']:
                         os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
@@ -1160,41 +1266,53 @@ class DGGRID(abc.ABC):
             except Exception:
                 pass
 
-        if split_dateline == True:
+        if split_dateline:
             return self.post_process_split_dateline(gdf)
         return gdf
 
 
-    def grid_cell_centroids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
-                                       output_address_type=None, **output_conf_extra):
+    def grid_cell_centroids_for_extent(
+        self,
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        clip_geom: "AnyGeometry" = None,
+        output_address_type: DggsOutputAddressTypeT | None = None,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> gpd.GeoDataFrame:
         """
-        generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
-            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+        generates a DGGS grid and returns all the cell's centroid as GeoDataFrame with geometry type Point
+            a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
-        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
+        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
         if not clip_geom is None and clip_geom.area > 0:
 
             clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
+            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'] )
 
             subset_conf.update({
                 'clip_subset_type': 'GDAL',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
+            })
+
+            if not self.has_gdal:
+                subset_conf.update({
+                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
-            if self.has_gdal is False:
-                subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
-                })
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
 
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'point_output_type': 'GDAL',
             'cell_output_type': 'NONE',
             'point_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
@@ -1202,9 +1320,9 @@ class DGGRID(abc.ABC):
             **output_extras
         }
 
-        if self.has_gdal is False:
+        if not self.has_gdal:
             output_conf.update({
-                'point_output_type': self.tmp_geo_out['legacy_driver'].upper(),
+                'point_output_type': cast(DggsFeatureOutputTypeT, self.tmp_geo_out['legacy_driver'].upper()),
                 'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('point_output_gdal_format', None)
@@ -1212,16 +1330,16 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
-        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
-        if self.debug is True:
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
+        if self.debug:
             print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
                 if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
@@ -1244,11 +1362,21 @@ class DGGRID(abc.ABC):
         return gdf
 
 
-    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None, split_dateline=False,
-                                        clip_subset_type='WHOLE_EARTH', clip_cell_res=1, input_address_type='SEQNUM',
-                                        output_address_type='SEQNUM', **output_conf_extra):
+    def grid_cell_polygons_from_cellids(
+        self,
+        cell_id_list: Sequence[str],
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        split_dateline: bool = False,
+        clip_subset_type: DggsClipSubsetTypeT = 'WHOLE_EARTH',
+        clip_cell_res: int = 1,
+        input_address_type: DggsInputAddressTypeT = 'SEQNUM',
+        output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> gpd.GeoDataFrame:
         """
-        generates a DGGS grid and returns all the cells as Geodataframe with geometry type Polygon
+        generates a DGGS grid and returns all the cells as GeoDataFrame with geometry type Polygon
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
             b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, ZORDER ..?) for subsetting
         """
@@ -1256,7 +1384,7 @@ class DGGRID(abc.ABC):
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
-        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
+        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
         seq_df = None
 
         if not cell_id_list is None and len(cell_id_list) > 0:
@@ -1267,10 +1395,10 @@ class DGGRID(abc.ABC):
             subset_conf.update({
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
-                })
+            })
 
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
-            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual paent cell type clip (also for Z3 ..)
+            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
             if (
                 input_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
                 and output_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
@@ -1292,8 +1420,12 @@ class DGGRID(abc.ABC):
                         }
                     )
 
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
             'cell_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
@@ -1301,9 +1433,9 @@ class DGGRID(abc.ABC):
             **output_extras
         }
 
-        if self.has_gdal is False:
+        if not self.has_gdal:
             output_conf.update({
-                'cell_output_type': self.tmp_geo_out['legacy_driver'].upper(),
+                'cell_output_type': cast(DggsFeatureOutputTypeT, self.tmp_geo_out['legacy_driver'].upper()),
                 'cell_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('cell_output_gdal_format', None)
@@ -1311,11 +1443,11 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
-        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
-        if self.debug is True:
+        dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
+        if self.debug:
             print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
@@ -1324,7 +1456,7 @@ class DGGRID(abc.ABC):
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
             # as they are all seqnum cell IDs they should all be long integers, otherwise keep string type
             if not output_address_type == input_address_type:
-                if self.debug is True:
+                if self.debug:
                     print(f"cannot switch address types on the fly here: {input_address_type} !=  {output_address_type}")
 
             # seq_df['cell_exists'] = True
@@ -1343,7 +1475,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.join( seq_df, how='inner', left_on=name_col, right_on=input_address_type)
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
                 if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
@@ -1363,16 +1495,25 @@ class DGGRID(abc.ABC):
             except Exception:
                 pass
 
-        if split_dateline == True:
+        if split_dateline:
             return self.post_process_split_dateline(gdf)
         return gdf
 
 
-    def grid_cell_centroids_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
-                                         clip_subset_type='WHOLE_EARTH', clip_cell_res=1, input_address_type='SEQNUM',
-                                         output_address_type='SEQNUM', **output_conf_extra):
+    def grid_cell_centroids_from_cellids(
+        self,
+        cell_id_list: Sequence[str],
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        clip_subset_type: DggsClipSubsetTypeT = 'WHOLE_EARTH',
+        clip_cell_res: int = 1,
+        input_address_type: DggsInputAddressTypeT = 'SEQNUM',
+        output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ):
         """
-        generates a DGGS grid and returns all the cell's centroid as Geodataframe with geometry type Point
+        generates a DGGS grid and returns all the cell's centroid as GeoDataFrame with geometry type Point
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
             b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER) for subsetting
         """
@@ -1380,7 +1521,7 @@ class DGGRID(abc.ABC):
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
-        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
+        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
         seq_df = None
 
         if not cell_id_list is None and len(cell_id_list) > 0:
@@ -1392,10 +1533,10 @@ class DGGRID(abc.ABC):
             subset_conf.update({
                 'clip_subset_type': 'SEQNUMS',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
-                })
+            })
 
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
-            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual paent cell type clip (also for Z3 ..)
+            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
             if (
                 input_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
                 and output_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
@@ -1417,18 +1558,22 @@ class DGGRID(abc.ABC):
                         }
                     )
 
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'point_output_type': 'GDAL',
-            'cell_output_type': 'None',
+            'cell_output_type': 'NONE',
             'point_output_gdal_format' : self.tmp_geo_out['legacy_driver'],
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
             **output_extras
         }
 
-        if self.has_gdal is False:
+        if not self.has_gdal:
             output_conf.update({
-                'point_output_type': self.tmp_geo_out['legacy_driver'].upper(),
+                'point_output_type': cast(DggsFeatureOutputTypeT, self.tmp_geo_out['legacy_driver'].upper()),
                 'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve())
             })
             output_conf.pop('point_output_gdal_format', None)
@@ -1437,11 +1582,11 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
-        if self.debug is True:
+        if self.debug:
             print(dggs_ops)
 
         gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
@@ -1450,7 +1595,7 @@ class DGGRID(abc.ABC):
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
             # as they are all seqnum cell IDs they should all be long integers, otherwise keep string type
             if not output_address_type == input_address_type:
-                if self.debug is True:
+                if self.debug:
                     print(f"cannot switch address types on the fly here: {input_address_type} !=  {output_address_type}")
 
             # seq_df['cell_exists'] = True
@@ -1464,7 +1609,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.join( seq_df, how='inner', on=name_col)
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
                 if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
@@ -1481,11 +1626,18 @@ class DGGRID(abc.ABC):
         return gdf
 
 
-    def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
-                                output_address_type=None, **output_conf_extra):
+    def grid_cellids_for_extent(
+        self,
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        clip_geom: "AnyGeometry" = None,
+        output_address_type: DggsOutputAddressTypeT | None = None,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> pd.DataFrame:
         """
         generates a DGGS grid and returns all the cellids as a pandas dataframe
-            a) if clip_geom is empty/None: grid cell ids/seqnms for the WHOLE_EARTH
+            a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
             TODO could cellids be generated for COARSE_CELLS? Generate child id from list of parent ids?
         """
@@ -1498,20 +1650,25 @@ class DGGRID(abc.ABC):
         if not clip_geom is None and clip_geom.area > 0:
 
             clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_gdf.to_file(Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
+            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'] )
 
             subset_conf.update({
                 'clip_subset_type': 'GDAL',
                 'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
                 })
 
-            if self.has_gdal is False:
+            if not self.has_gdal:
                 subset_conf.update({
-                    'clip_subset_type': self.tmp_geo_out['legacy_driver'].upper()
+                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'point_output_type': 'TEXT',
             'cell_output_type': 'NONE',
             'point_output_file_name': str( (Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}").resolve()),
@@ -1521,18 +1678,18 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
-        if self.debug is True:
+        if self.debug:
             print(dggs_ops)
 
         datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
         df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype=datatype)
         df = df.dropna()
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt") )
                 os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
@@ -1549,13 +1706,21 @@ class DGGRID(abc.ABC):
         return df
 
 
-    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution,
-                             mixed_aperture_level=None, split_dateline=False,
-                             output_address_type=None, **output_conf_extra):
+    def cells_for_geo_points(
+        self,
+        geodf_points_wgs84: gpd.GeoDataFrame,
+        cell_ids_only: bool,
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        split_dateline: bool = False,
+        output_address_type: DggsOutputAddressTypeT | None = None,
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> gpd.GeoDataFrame:
         """
-        takes a geodataframe with point geometry and optional additional value columns and returns:
-            a) if cell_ids_only == True: the same geodataframe with an additional column with the cell ids
-            b) if cell_ids_only == False: a new Geodataframe with geometry type Polygon, with column of cell ids and the additional columns
+        takes a GeoDataFrame with point geometry and optional additional value columns and returns:
+            a) if cell_ids_only == True: the same GeoDataFrame with an additional column with the cell ids
+            b) if cell_ids_only == False: a new GeoDataFrame with geometry type Polygon, with column of cell ids and the additional columns
         """
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
@@ -1571,11 +1736,14 @@ class DGGRID(abc.ABC):
 
         geodf_points_wgs84[cols_ordered].to_csv( str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()) , header=False, index=False, columns=cols_ordered, sep=' ')
 
-        subset_conf = {
+        subset_conf: DggridMetaConfigT = {
             'input_file_name':  str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()),
             'input_address_type': 'GEO',
             'input_delimiter': "\" \""
-            }
+        }
+        subset_conf.update(specify_resolution(**output_conf_extra))
+        subset_conf.update(specify_orient_type_args(**output_conf_extra))
+        subset_conf.update(specify_topo_aperture(**output_conf_extra))
 
         output_extras = self.check_output_extra_fields(output_conf_extra)
         output_conf = {
@@ -1588,18 +1756,18 @@ class DGGRID(abc.ABC):
         if not output_address_type is None and output_address_type in self.output_address_types:
             output_conf.update({'output_address_type': output_address_type})
         else:
-            if self.debug is True:
+            if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
 
-        dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
-        if self.debug is True:
+        dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, **output_conf)
+        if self.debug:
             print(dggs_ops)
         datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype=datatype)
         df = df.dropna()
         cell_id_list = df[0].values
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
                 os.remove( str( Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt") )
@@ -1608,30 +1776,41 @@ class DGGRID(abc.ABC):
             except Exception:
                 pass
 
-        if cell_ids_only == True:
+        if cell_ids_only:
             geodf_points_wgs84['name'] = cell_id_list
             return geodf_points_wgs84
         else:
             # grid_gen from seqnums
-            gdf = self.grid_cell_polygons_from_cellids(cell_id_list=cell_id_list,
-                                                    dggs_type=dggs_type,
-                                                    resolution=resolution,
-                                                    mixed_aperture_level=mixed_aperture_level, input_address_type=output_address_type,
-                                                    output_address_type=self.output_address_types)
+            gdf = self.grid_cell_polygons_from_cellids(
+                cell_id_list=cell_id_list,
+                dggs_type=dggs_type,
+                resolution=resolution,
+                mixed_aperture_level=mixed_aperture_level,
+                input_address_type=output_address_type,
+                output_address_type=self.output_address_types,
+            )
             try:
                 for col in cols_ordered:
                     gdf[col] = geodf_points_wgs84[col].values
             except Exception:
                 pass
 
-            if split_dateline == True:
+            if split_dateline:
                 return self.post_process_split_dateline(gdf)
 
             return gdf
 
 
-    def address_transform(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
-                          input_address_type='SEQNUM', output_address_type='SEQNUM', **output_conf_extra):
+    def address_transform(
+        self,
+        cell_id_list: Sequence[str],
+        dggs_type: DggsTypeT,
+        resolution: int,
+        mixed_aperture_level: int = None,
+        input_address_type: DggsInputAddressTypeT = 'SEQNUM',
+        output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
+        **output_conf_extra: DggridMetaConfigParameterT,
+    ) -> pd.DataFrame:
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
             cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER)
@@ -1652,29 +1831,29 @@ class DGGRID(abc.ABC):
         seq_df = pd.DataFrame({ input_address_type: cell_id_list})
         seq_df.to_csv( str( (Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt").resolve()) , header=False, index=False, columns=[input_address_type], sep=' ')
 
-        subset_conf = {
+        subset_conf: DggridMetaConfigT = {
             'input_file_name':  str( (Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt").resolve()),
             'input_address_type': input_address_type,
             'input_delimiter': "\" \""
-            }
+        }
 
         output_extras = self.check_output_extra_fields(output_conf_extra)
-        output_conf = {
+        output_conf: DggridMetaConfigT = {
             'output_file_name': str( (Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt").resolve()),
             'output_address_type': output_address_type,
             'output_delimiter': "\" \"",
             **output_extras,
         }
 
-        dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, output_conf)
-        if self.debug is True:
+        dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, **output_conf)
+        if self.debug:
             print(dggs_ops)
 
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0:'str', 1:'str'})
         df = df.dropna()
         seq_df[output_address_type] = df.iloc[:,0]
 
-        if self.debug is False:
+        if not self.debug:
             try:
                 os.remove( str( Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt") )
                 os.remove( str( Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt") )
@@ -1686,13 +1865,13 @@ class DGGRID(abc.ABC):
 
 class DGGRIDv7(DGGRID):
     version = 7
-    output_address_types = output_address_types_v7
+    output_address_types: DggsOutputAddressTypeV7T = output_address_types_v7
     output_extra_fields = output_extra_fields_v7
 
 
 class DGGRIDv8(DGGRID):
     version = 8
-    output_address_types = output_address_types_v8
+    output_address_types: DggsOutputAddressTypeV8T = output_address_types_v8
     output_extra_fields = output_extra_fields_v8
 
 
@@ -1701,174 +1880,195 @@ class DGGRIDv8(DGGRID):
 below is an earlier attempt on custom DGGS configuration, currently we only barely support the predefined DGGS_TYPES
 """
 
-parameters = (
-    'bin_coverage',
-    'cell_output_control',
-    'cell_output_file_name',
-    'cell_output_gdal_format',
-    'cell_output_type',
-    'children_output_file_name',
-    'children_output_type',
-    'clipper_scale_factor',
-    'clip_region_files',
-    'clip_subset_type',
-    'densification',
-    'dggrid_operation',
-    'dggs_aperture_sequence',
-    'dggs_aperture_type',
-    'dggs_num_aperture_4_res',
-    'dggs_proj',
-    'dggs_res_spec',
-    'dggs_res_specify_area',
-    'dggs_res_specify_rnd_down',
-    'dggs_res_specify_type',
-    'dggs_topology',
-    'dggs_type',
-    'geodetic_densify',
-    'input_address_type',
-    'input_delimiter',
-    'input_file_name',
-    'input_files',
-    'kml_default_color',
-    'kml_default_width',
-    'kml_description',
-    'kml_name',
-    'max_cells_per_output_file',
-    'neighbor_output_file_name',
-    'neighbor_output_type',
-    'output_address_type',
-    'output_count',
-    'output_delimiter',
-    'output_file_name',
-    'point_output_file_name',
-    'point_output_gdal_format',
-    'point_output_type',
-    'precision',
-    'shapefile_id_field_length',
-    'update_frequency',
-    'verbosity'
-)
 
-def specify_orient_type_args(orient_type,
-                            dggs_vert0_lon=11.25,
-                            dggs_vert0_lat=58.28252559,
-                            dggs_vert0_azimuth=0.0,
-                            dggs_orient_rand_seed=42):
+def specify_orient_type_args(
+    # use official DGGRID parameter names to map directly by keyword unpacking
+    # note: first 3 are placed in the same order as originals to handle positional invocation seamlessly
+    dggs_orient_specify_type=None,
+    dggs_vert0_lon: DggsDegree = None,
+    dggs_vert0_lat: DggsDegree = None,
+    dggs_vert0_azimuth: DggsDegree = None,
+    dggs_orient_rand_seed=42,
+    # backward compatibility parameters
+    orient_type=None,
+    **_,  # ignore unknowns
+) -> DggridMetaConfigT:
+    dggs_orient_specify_type = dggs_orient_specify_type or orient_type
 
-    if orient_type == 'SPECIFIED':
+    if dggs_orient_specify_type == 'SPECIFIED' or any(
+        val is not None for val in [dggs_vert0_lon, dggs_vert0_lat, dggs_vert0_azimuth]
+    ):
+        if dggs_vert0_lon is not None:
+            dggs_vert0_lon_val = decimal.Decimal(dggs_vert0_lon)
+            if dggs_vert0_lon_val < -180.0 or dggs_vert0_lon_val > 180.0:
+                raise ValueError('dggs_vert0_lon must be in range [-180,180]')
+        if dggs_vert0_lat is not None:
+            dggs_vert0_lat_val = decimal.Decimal(dggs_vert0_lat)
+            if dggs_vert0_lat_val < -90.0 or dggs_vert0_lat_val > 90.0:
+                raise ValueError('dggs_vert0_lat must be in range [-90,90]')
+        if dggs_vert0_azimuth is not None:
+            dggs_vert0_azimuth_val = decimal.Decimal(dggs_vert0_azimuth)
+            if dggs_vert0_azimuth_val < 0.0 or dggs_vert0_azimuth_val > 360.0:
+                raise ValueError('dggs_vert0_azimuth must be in range [0,360]')
         return {
+            'dggs_orient_specify_type' : 'SPECIFIED',
             'dggs_vert0_lon' : dggs_vert0_lon,
             'dggs_vert0_lat' : dggs_vert0_lat,
             'dggs_vert0_azimuth' : dggs_vert0_azimuth
         }
-    if orient_type == 'RANDOM':
+    if dggs_orient_specify_type == 'RANDOM':
         return { 'dggs_orient_rand_seed' : dggs_orient_rand_seed }
 
     # else default REGION_CENTER
+    return {}
 
 
-def specify_topo_aperture(topology_type, aperture_type, aperture_res, dggs_num_aperture_4_res=0, dggs_aperture_sequence="333333333333"):
-    if not topology_type in dggs_topologies or not aperture_type in dggs_aperture_types:
-        raise ValueError('topology or aperture type unknow')
+def specify_topo_aperture(
+    # use official DGGRID parameter names to map directly by keyword unpacking
+    # note: first 3 are placed in the same order as originals to handle positional invocation seamlessly
+    dggs_topology_type: DggsTopologyTypeT = None,
+    dggs_aperture_type: DggsApertureTypeT = None,
+    dggs_aperture: DggsApertureT = None,
+    dggs_num_aperture_4_res: int = 0,
+    dggs_aperture_sequence: str = "333333333333",
+    # backward compatibility parameters
+    topology_type: DggsTopologyTypeT = None,
+    aperture_type: DggsApertureTypeT = None,
+    aperture_res: DggsApertureT = None,
+    **_,  # ignore unknowns
+) -> DggridMetaConfigT:
+    dggs_topology_type = dggs_topology_type or topology_type
+    dggs_aperture_type = dggs_aperture_type or aperture_type
+    dggs_aperture: DggsApertureT = dggs_aperture or aperture_res
 
-    if aperture_type == 'PURE':
-        if topology_type == 'HEXAGON':
-            if not aperture_res in [3, 4, 7]:
-                print(f"combo not possible / {topology_type} {aperture_res} / setting 3H")
-                return { '#short_name': "3H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
+    if dggs_topology_type is None and dggs_aperture_type is None:
+        return {}
+
+    if not dggs_topology_type in dggs_topologies or not dggs_aperture_type in dggs_aperture_types:
+        raise ValueError('topology or aperture type unknown')
+
+    if dggs_aperture_type == 'PURE':
+        if dggs_topology_type == 'HEXAGON':
+            if not dggs_aperture in [3, 4, 7]:
+                print(f"combo not possible / {dggs_topology_type} {dggs_aperture} / setting 3H")
+                return {
+                    '#short_name': "3H",
+                    'dggs_topology': dggs_topology_type,
+                    'dggs_aperture_type': dggs_aperture_type,
                     'dggs_aperture': 3
-                    }
+                }
             else:
-                return { '#short_name': f"{aperture_res}H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': aperture_res
-                    }
+                return {
+                    '#short_name': f"{dggs_aperture}H",
+                    'dggs_topology': dggs_topology_type,
+                    'dggs_aperture_type': dggs_aperture_type,
+                    'dggs_aperture': dggs_aperture
+                }
 
-        if topology_type in ['TRIANGLE', 'DIAMOND']:
-            if not aperture_res == 4:
-                print(f"combo not possible / {topology_type} {aperture_res} / setting 4{topology_type[0]}")
-                return { '#short_name': f"4{topology_type[0]}",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
+        if dggs_topology_type in ['TRIANGLE', 'DIAMOND']:
+            if not dggs_aperture == 4:
+                print(f"combo not possible / {dggs_topology_type} {dggs_aperture} / setting 4{dggs_topology_type[0]}")
+                return {
+                    '#short_name': f"4{dggs_topology_type[0]}",
+                    'dggs_topology': dggs_topology_type,
+                    'dggs_aperture_type': dggs_aperture_type,
                     'dggs_aperture': 4
-                    }
+                }
             else:
-                return { '#short_name': f"4{topology_type[0]}",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_aperture': aperture_res
-                    }
+                return {
+                    '#short_name': f"4{dggs_topology_type[0]}",
+                    'dggs_topology': dggs_topology_type,
+                    'dggs_aperture_type': dggs_aperture_type,
+                    'dggs_aperture': dggs_aperture
+                }
 
-    elif aperture_type == 'MIXED43':
+    elif dggs_aperture_type == 'MIXED43':
         # dggs_aperture is ignored, only HEXAGON can have MIXED34
-        if topology_type == 'HEXAGON':
+        if dggs_topology_type == 'HEXAGON':
             # dggs_num_aperture_4_res (default 0)
-            return { '#short_name': f"43H",
-                    'dggs_topology': topology_type,
-                    'dggs_aperture_type': aperture_type,
-                    'dggs_num_aperture_4_res': dggs_num_aperture_4_res,
-                    '#dggs_aperture': aperture_res
-                    }
+            return {
+                '#short_name': f"43H",
+                'dggs_topology': dggs_topology_type,
+                'dggs_aperture_type': dggs_aperture_type,
+                'dggs_num_aperture_4_res': dggs_num_aperture_4_res,
+                '#dggs_aperture': dggs_aperture
+            }
         else:
             raise ValueError('not yet implemented')
 
-    elif aperture_type == "SEQUENCE":
+    elif dggs_aperture_type == "SEQUENCE":
         # dggs_aperture_sequence (default “333333333333”).
-        return { '#short_name': f"SEQ{topology_type[0]}",
-                'dggs_topology': topology_type,
-                'dggs_aperture_type': aperture_type,
-                'dggs_aperture_sequence': str(dggs_aperture_sequence),
-                '#dggs_aperture': aperture_res
-            }
-
-
-def specify_resolution(proj_spec,
-                        dggs_res_spec_type,
-                        dggs_res_spec=9,
-                        dggs_res_specify_area=120000,
-                        dggs_res_specify_intercell_distance=4000,
-                        dggs_res_specify_rnd_down=True):
-    if not proj_spec in list(dggs_projections) or not dggs_res_spec_type in dggs_res_specify_types:
-        raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
-
-    if dggs_res_spec_type == "SPECIFIED":
         return {
-            'dggs_proj': proj_spec,
-            'dggs_res_specify_type': dggs_res_spec
+            '#short_name': f"SEQ{dggs_topology_type[0]}",
+            'dggs_topology': dggs_topology_type,
+            'dggs_aperture_type': dggs_aperture_type,
+            'dggs_aperture_sequence': str(dggs_aperture_sequence),
+            '#dggs_aperture': dggs_aperture
         }
 
-    elif dggs_res_spec_type == 'CELL_AREA':
+    return {}
+
+
+def specify_resolution(
+    # use official DGGRID parameter names to map directly by keyword unpacking
+    # note: first 2 are placed in the same order as original to handle positional invocation seamlessly
+    dggs_proj: DggsProjectionT = None,
+    dggs_res_specify_type: DggsResSpecifyTypeT =None,
+    dggs_res_spec: int = 9,
+    dggs_res_specify_area: float = 120000,
+    dggs_res_specify_intercell_distance: float = 4000,
+    dggs_res_specify_rnd_down: bool = True,
+    # backward compatibility
+    proj_spec=None,
+    dggs_res_spec_type=None,
+    **_,  # ignore unknowns
+) -> DggridMetaConfigT:
+    dggs_proj = dggs_proj or proj_spec
+    dggs_res_specify_type = dggs_res_specify_type or dggs_res_spec_type
+
+    if dggs_proj is None or dggs_res_specify_type is None:
+        return {}
+
+    if not proj_spec in list(dggs_projections) or not dggs_res_specify_type in dggs_res_specify_types:
+        raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
+
+    if dggs_res_specify_type == "SPECIFIED":
         return {
-            'dggs_proj': proj_spec,
+            'dggs_proj': dggs_proj,
+            'dggs_res_spec': dggs_res_spec
+        }
+
+    elif dggs_res_specify_type == 'CELL_AREA':
+        return {
+            'dggs_proj': dggs_proj,
             'dggs_res_specify_area': dggs_res_specify_area, # (in square kilometers)
             'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
         }
-    elif dggs_res_spec_type == 'INTERCELL_DISTANCE':
+    elif dggs_res_specify_type == 'INTERCELL_DISTANCE':
         return {
-            'dggs_proj': proj_spec,
+            'dggs_proj': dggs_proj,
             'dggs_res_specify_intercell_distance': dggs_res_specify_intercell_distance, # (in kilometers)
             'dggs_res_specify_rnd_down' : dggs_res_specify_rnd_down
         }
 
+    return {}
 
-def dgconstruct(dggs_type: str   = "CUSTOM", # dggs_type
-                projection: str   = 'ISEA',  # dggs_projection
-                aperture: int     = 3,  # dggs_aperture_type / dggs_aperture
-                topology: str     = 'HEXAGON', # dggs_topology
-                res: int          = None, # dggs_res_spec
-                precision: int    = 7,
-                area: float         = None, # dggs_res_specify_area
-                spacing: float      = None,
-                cls_val: float          = None, # dggs_res_specify_intercell_distance
-                resround: str     = 'nearest',
-                metric: bool       = True,
-                show_info: bool    = True,
-                azimuth_deg: float  = 0, # dggs_vert0_azimuth
-                pole_lat_deg: float = 58.28252559, # dggs_vert0_lat
-                pole_lon_deg: float = 11.25 # dggs_vert0_lon
+
+def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
+                projection: DggsProjectionT = 'ISEA',  # dggs_projection
+                aperture: DggsApertureT     = 3,  # dggs_aperture_type / dggs_aperture
+                topology: DggsTopologyTypeT = 'HEXAGON', # dggs_topology
+                res: int                    = None, # dggs_res_spec
+                precision: int              = 7,
+                area: float                 = None, # dggs_res_specify_area
+                spacing: float              = None,
+                cls_val: float              = None, # dggs_res_specify_intercell_distance
+                resround: str               = 'nearest',
+                metric: bool                = True,
+                show_info: bool             = True,
+                azimuth_deg: float          = 0, # dggs_vert0_azimuth
+                pole_lat_deg: float         = 58.28252559, # dggs_vert0_lat
+                pole_lon_deg: float         = 11.25 # dggs_vert0_lon
                 ):
 
     if not len(list(filter(lambda x: not x is None, [res,area,spacing,cls_val])))  == 1:
@@ -1876,7 +2076,7 @@ def dgconstruct(dggs_type: str   = "CUSTOM", # dggs_type
 
     #Use a dummy resolution, we'll fix it in a moment
     dggs = Dggs(
-        dggs_type   = dggs_type,
+        dggs_type    = dggs_type,
         pole_lon_deg = pole_lon_deg,
         pole_lat_deg = pole_lat_deg,
         azimuth_deg  = azimuth_deg,
