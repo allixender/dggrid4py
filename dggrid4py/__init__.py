@@ -8,7 +8,7 @@
 # Date: 07-12-2022 
 #
 
-from .dggrid_runner import DGGRIDv7, Dggs, dgselect, dggs_types
+from .dggrid_runner import DGGRIDv7, DGGRIDv8, Dggs, dgselect, dggs_types
 import dggrid4py.igeo7 as igeo7
 import dggrid4py.tool as tool
 
