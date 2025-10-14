@@ -133,7 +133,7 @@ comfortable geopython libraries, like shapely and geopandas
 IGEO7 Usage
 -----------
 
-Link to IGEO7 description: :ref:`IGEO7 <IGEO7>`
+Link to IGEO7 description: :ref:`IGEO7 <IGEO7>`_
 
 TODO
 ----
