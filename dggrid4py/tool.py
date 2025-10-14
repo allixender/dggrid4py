@@ -26,7 +26,7 @@ def download_executable(url, folder="./"):
     # Return the absolute path
     return os.path.abspath(local_path)
 
-
+# TODO: could be cache checked
 def get_portable_executable(folder="./"):
     import platform
 

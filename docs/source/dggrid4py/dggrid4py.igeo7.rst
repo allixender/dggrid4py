@@ -1,6 +1,8 @@
 dggrid4py.igeo7
 ===============
 
+This module provides functionality for working with the IGEO7 discrete global grid system.
+
 .. automodule:: dggrid4py.igeo7
 
    .. rubric:: Functions

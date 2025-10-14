@@ -1,8 +1,8 @@
-IGEO7: A Hierarchically Indexed Hexagonal Equal-Area Discrete Global Grid System
-================================================================================
+IGEO7
+=====
 
-Overview
---------
+Overview: A Hierarchically Indexed Hexagonal Equal-Area Discrete Global Grid System
+-----------------------------------------------------------------------------------
 
 Hexagonal Discrete Global Grid Systems (DGGS) offer significant advantages for spatial analysis due to their uniform cell shapes and efficient indexing. Among the three central place apertures (3, 4, and 7), aperture 7 subdivisions exhibit very desirable properties, including the preservation of hexagonal symmetry and the formation of unambiguous indexing hierarchies.
 
@@ -13,18 +13,19 @@ We present **IGEO7**, a novel pure aperture 7 hexagonal DGGS, and **Z7**, its as
 IGEO7 and Z7 are implemented in the open-source software DGGRID. We also present a use case for on-demand suitability modeling to demonstrate a practical application of this new DGGS.
 
 
-Practical information and OGC compliance
-----------------------------------------
+Practical information and sphere vs ellipsoid
+---------------------------------------------
 
 The original IGEO7 implementation is available in the DGGRID software since version 8.41 and is a ISEA7H type DGGS with the new Z7 indexing system.
 
-Recent developments in the OGC API DGGS standard draft make reference to refinement ratio 7 DGGRS. In order to have DGGH and ZIRS compliant with the OGC DGGS standard,
+Recent developments in the OGC API DGGS standard draft make reference to refinement ratio 7 DGGRS with ISEA projection.
+In order to have DGGH and ZIRS compliant with the OGC DGGS standard,
 we aim to enable a few minor adjustments to IGEO7 through the use of dggrid4py:
 
--  a rotation of the base icosahedron of 0.5 degrees to align the vertices with water bodies.
-- the use of geographiclib to apply authalic conversion to the WGS84 ellipsoid instead of the spherical approximation.
+- to apply authalic conversion to the WGS84 ellipsoid instead of the spherical approximation, using `pygeodesy` (based off geographiclib), see :mod:`dggrid4py.auxlat`
+- a rotation of the base icosahedron of 0.05 degrees to align the vertices better with water bodies through a specific parameter in DGGRID. Example: TODO
 
-In practice this would mean that IGEO7 as described in the original publication is not the same as the OGC compliant IGEO7 version, though both can be generated through dggrid4py.
+In practice this means that IGEO7 as described in the original publication is not the same as the ellipsoid-adjusted IGEO7 version, though both can be generated through dggrid4py.
 
 We hope to make the required changes available in DGGRID in the future, so that now further confusions can arise. Until then, there might 
 be two slightly different IGEO7 implementations in use and implementers shall be explicit. 

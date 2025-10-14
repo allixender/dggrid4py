@@ -11,5 +11,6 @@
 from .dggrid_runner import DGGRIDv7, DGGRIDv8, Dggs, dgselect, dggs_types
 import dggrid4py.igeo7 as igeo7
 import dggrid4py.tool as tool
+from .auxlat import geoseries_to_authalic, geoseries_to_geodetic, geodetic_to_authalic, authalic_to_geodetic
 
-__version__ = "0.5.0-dev"
+__version__ = "0.5.1-dev"
