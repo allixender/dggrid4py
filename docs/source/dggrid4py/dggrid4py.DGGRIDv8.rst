@@ -1,6 +1,14 @@
 ﻿dggrid4py.DGGRIDv8
 ==================
 
+The DGGRIDv8 class has been introduced to provide custom parameters to the DGGRID version 8.x series.
+
+For "default" or "classical" behavior of dggrid4py parameter handling, the DGGRIDv7 class should be used.
+
+How to pass additional parameters to DGGRIDv8:
+
+.. image:: config_v8_extra.png
+
 .. currentmodule:: dggrid4py
 
 .. autoclass:: DGGRIDv8
