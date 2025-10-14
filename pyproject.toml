@@ -35,6 +35,7 @@ pandas = ">=1.4.0, <2.4.0"
 fiona = ">=1.8.0, <2.0.0"
 shapely = ">=1.8.0, <=2.1.0"
 geopandas = ">=0.9.0, <=1.1.0"
+pygeodesy = "25.10.10"
 
 
 [tool.poetry.group.dev.dependencies]
