@@ -189,7 +189,7 @@ DggsOutputCellLabelTypeT = DggsOutputCellLabelTypeV7T | DggsOutputCellLabelTypeV
 DggsCellOutputControlT = Literal["OUTPUT_ALL", "OUTPUT_OCCUPIED"]
 cell_output_controls = get_args(DggsCellOutputControlT)
 
-DggsInputAddressTypeT = Literal[
+DggsInputAddressTypeV7T = Literal[
     'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
     'Q2DI', # quad number and (i, j) coordinates on that quad
     'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
@@ -204,7 +204,36 @@ DggsInputAddressTypeT = Literal[
     'ZORDER', # index system ZORDER especially useful for ISEA3H, ISEA4H and mixed aperture
     'ZORDER_STRING'  # numerical digits representation of ZORDER (as characters, not an integer)
 ]
-input_address_types = get_args(DggsInputAddressTypeT)
+input_address_types_v7 = get_args(DggsInputAddressTypeV7T)
+
+DggsInputAddressTypeV8T = Literal[
+    'GEO', # geodetic coordinates -123.36 43.22 20300 Roseburg
+    'Q2DI', # quad number and (i, j) coordinates on that quad
+    'SEQNUM', # DGGS index - linear address (1 to size-of-DGG), not supported for parameter input_address_type if dggs_aperture_type is SEQUENCE
+    'INTERLEAVE', # digit-interleaved form of Q2DI, only supported for parameter output_address_type; only available for hexagonal aperture 3 and 4 grids
+    'PLANE', # (x, y) coordinates on unfolded ISEA plane,  only supported for parameter output_address_type;
+    'Q2DD', # quad number and (x, y) coordinates on that quad
+    'PROJTRI', # PROJTRI - triangle number and (x, y) coordinates within that triangle on the ISEA plane
+    'VERTEX2DD', # vertex number, triangle number, and (x, y) coordinates on ISEA plane
+    'AIGEN',  # Arc/Info Generate file format
+    'HIERNDX',
+]
+input_address_types_v8 = get_args(DggsInputAddressTypeV8T)
+
+DggsInputAddressTypeT = DggsInputAddressTypeV7T | DggsInputAddressTypeV8T
+
+input_extra_fields_v7 = {}
+
+DggsInputHierNdxSystemT = Literal['Z3', 'Z7', 'ZORDER']
+input_hier_ndx_systems = get_args(DggsInputHierNdxSystemT)
+
+DggsInputHierNdxFormT = Literal['INT64', 'DIGIT_STRING']
+input_hier_ndx_forms = get_args(DggsInputHierNdxFormT)
+
+input_extra_fields_v8 = {
+    'input_hier_ndx_system': input_hier_ndx_systems,
+    'input_hier_ndx_form': input_hier_ndx_forms,
+}
 
 ### CUSTOM args
 DggsProjectionT = Literal["ISEA", "FULLER"]
@@ -272,6 +301,8 @@ DggridMetaConfigT = TypedDict(
         "clip_region_files": str,
         "clipper_scale_factor": float,
         "input_address_type": DggsInputAddressTypeT,
+        "input_hier_ndx_form": DggsInputHierNdxFormT,
+        "input_hier_ndx_system": DggsInputHierNdxSystemT,
         "input_delimiter": str,
         "input_file_name": str,
         "input_files": str,
@@ -329,6 +360,13 @@ def __getattr__(name):  # for backward compatibility helper/warning
         warnings.warn(
             "Definitions 'output_address_types' has been deprecated. "
             "Use the 'DGGRID.output_address_types' of desired version!",
+            DeprecationWarning
+        )
+        return output_address_types_v7
+    if name == 'input_address_types':
+        warnings.warn(
+            "Definitions 'input_address_types' has been deprecated. "
+            "Use the 'DGGRID.input_address_types' of desired version!",
             DeprecationWarning
         )
         return output_address_types_v7
@@ -603,6 +641,16 @@ class DGGRID(abc.ABC):
     def output_extra_fields(self) -> dict[str, Iterable[DggridMetaConfigParameterT]]:
         raise NotImplementedError
 
+    @property
+    @abc.abstractmethod
+    def input_address_types(self) -> Iterable[DggsInputAddressTypeT]:
+        raise NotImplementedError
+
+    @property
+    @abc.abstractmethod
+    def input_extra_fields(self) -> dict[str, Iterable[DggridMetaConfigParameterT]]:
+        raise NotImplementedError
+
     def check_output_extra_fields(
         self,
         output_conf: DggridMetaConfigT | dict[str, DggridMetaConfigParameterT],
@@ -615,6 +663,19 @@ class DGGRID(abc.ABC):
                     raise ValueError(f"output_conf '{conf}' has invalid value '{out}'. Allowed are {allowed}")
                 output_conf_extra[conf] = out
         return output_conf_extra
+
+    def check_input_extra_fields(
+        self,
+        input_conf: DggridMetaConfigT | dict[str, DggridMetaConfigParameterT],
+    ) -> DggridMetaConfigT:
+        input_conf_extra: DggridMetaConfigT = {}
+        for conf, allowed in self.input_extra_fields.items():
+            if conf in input_conf:
+                _in = input_conf[conf]
+                if _in not in allowed:
+                    raise ValueError(f"input_conf '{conf}' has invalid value '{_in}'. Allowed are {allowed}")
+                input_conf_extra[conf] = _in
+        return input_conf_extra
 
     def check_gdal_support(self):
         if self.has_gdal:
@@ -771,7 +832,7 @@ class DGGRID(abc.ABC):
         else:
             raise ValueError('something is not correct in subset_conf')
 
-        if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in input_address_types:
+        if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in self.input_address_types:
             metafile.append("input_address_type " + subset_conf['input_address_type'])
 
         # join grid gen params add to metafile
@@ -867,7 +928,7 @@ class DGGRID(abc.ABC):
         self,
         dggs: Dggs,
         subset_conf: DggridMetaConfigT,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> DggridApiOutputT:
         """
         Address Conversion. Transform a file of locations from one address form (such as longitude/latitude) to another (such as DGG cell indexes).
@@ -885,7 +946,7 @@ class DGGRID(abc.ABC):
         if (
             'input_file_name' in subset_conf.keys() and
             'input_address_type' in subset_conf.keys() and
-            subset_conf['input_address_type'] in input_address_types
+            subset_conf['input_address_type'] in self.input_address_types
         ):
             for elem in filter(lambda x: x.startswith('input_') , subset_conf.keys()):
                 metafile.append(f"{elem} " + str(subset_conf[elem]))
@@ -893,9 +954,12 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
+
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
 
         # transform output_types
         if (
@@ -908,7 +972,7 @@ class DGGRID(abc.ABC):
         else:
             raise ValueError('no output filename or type given')
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
                 metafile.append(f"{elem} " + str(value))
@@ -930,7 +994,7 @@ class DGGRID(abc.ABC):
         self,
         dggs: Dggs,
         subset_conf: DggridMetaConfigT,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> DggridApiOutputT:
         """
         Point Value Binning. Bin a set of floating-point values associated with point locations into the cells of a DGG,
@@ -972,7 +1036,7 @@ class DGGRID(abc.ABC):
         if (
             'input_file_name' in subset_conf.keys() and
             'input_address_type' in subset_conf.keys() and
-            subset_conf['input_address_type'] in input_address_types
+            subset_conf['input_address_type'] in self.input_address_types
         ):
             for elem in filter(lambda x: x.startswith('input_') , subset_conf.keys()):
                 metafile.append(f"{elem} " + subset_conf[elem])
@@ -980,9 +1044,12 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
+
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
 
         # transform output_types
         if (
@@ -995,7 +1062,7 @@ class DGGRID(abc.ABC):
         else:
             raise ValueError('no output filename or type given')
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
                 metafile.append(f"{elem} " + str(value))
@@ -1017,7 +1084,7 @@ class DGGRID(abc.ABC):
         self,
         dggs: Dggs,
         subset_conf: DggridMetaConfigT,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> DggridApiOutputT:
         """
         Presence/Absence Binning. Given a set of input files, each containing point locations associated with a particular class, DGGRID outputs,
@@ -1036,7 +1103,7 @@ class DGGRID(abc.ABC):
         if (
             'input_file_name' in subset_conf.keys() and
             'input_address_type' in subset_conf.keys() and
-            subset_conf['input_address_type'] in input_address_types
+            subset_conf['input_address_type'] in self.input_address_types
         ):
             for elem in filter(lambda x: x.startswith('input_') , subset_conf.keys()):
                 metafile.append(f"{elem} " + subset_conf[elem])
@@ -1044,9 +1111,12 @@ class DGGRID(abc.ABC):
             raise ValueError('no input filename or type given')
 
         # join grid gen params add to metafile
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
+
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
 
         # transform output_types
         if (
@@ -1059,7 +1129,7 @@ class DGGRID(abc.ABC):
         else:
             raise ValueError('no output filename or type given')
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
                 metafile.append(f"{elem} " + str(value))
@@ -1184,7 +1254,7 @@ class DGGRID(abc.ABC):
         clip_geom: "AnyGeometry" = None,
         split_dateline: bool = False,
         output_address_type: DggsOutputAddressTypeT | None = None,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> gpd.GeoDataFrame:
         """
         generates a DGGS grid and returns all the cells as GeoDataFrame with geometry type Polygon
@@ -1213,11 +1283,14 @@ class DGGRID(abc.ABC):
                     'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
@@ -1278,7 +1351,7 @@ class DGGRID(abc.ABC):
         mixed_aperture_level: int = None,
         clip_geom: "AnyGeometry" = None,
         output_address_type: DggsOutputAddressTypeT | None = None,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> gpd.GeoDataFrame:
         """
         generates a DGGS grid and returns all the cell's centroid as GeoDataFrame with geometry type Point
@@ -1307,11 +1380,14 @@ class DGGRID(abc.ABC):
                     'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'point_output_type': 'GDAL',
             'cell_output_type': 'NONE',
@@ -1373,7 +1449,7 @@ class DGGRID(abc.ABC):
         clip_cell_res: int = 1,
         input_address_type: DggsInputAddressTypeT = 'SEQNUM',
         output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> gpd.GeoDataFrame:
         """
         generates a DGGS grid and returns all the cells as GeoDataFrame with geometry type Polygon
@@ -1400,8 +1476,8 @@ class DGGRID(abc.ABC):
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
             if (
-                input_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
-                and output_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
+                input_address_type in self.input_address_types
+                and output_address_type in self.output_address_types
             ):
                 subset_conf.update(
                     {
@@ -1420,11 +1496,14 @@ class DGGRID(abc.ABC):
                         }
                     )
 
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'cell_output_type': 'GDAL',
             'point_output_type': 'NONE',
@@ -1510,7 +1589,7 @@ class DGGRID(abc.ABC):
         clip_cell_res: int = 1,
         input_address_type: DggsInputAddressTypeT = 'SEQNUM',
         output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ):
         """
         generates a DGGS grid and returns all the cell's centroid as GeoDataFrame with geometry type Point
@@ -1538,8 +1617,8 @@ class DGGRID(abc.ABC):
             # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
             # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
             if (
-                input_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
-                and output_address_type in ['Z3', 'Z3_STRING', 'Z7', 'Z7_STRING', 'ZORDER', 'ZORDER_STRING']
+                input_address_type in self.input_address_types
+                and output_address_type in self.output_address_types
             ):
                 subset_conf.update(
                     {
@@ -1558,11 +1637,14 @@ class DGGRID(abc.ABC):
                         }
                     )
 
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'point_output_type': 'GDAL',
             'cell_output_type': 'NONE',
@@ -1633,7 +1715,7 @@ class DGGRID(abc.ABC):
         mixed_aperture_level: int = None,
         clip_geom: "AnyGeometry" = None,
         output_address_type: DggsOutputAddressTypeT | None = None,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> pd.DataFrame:
         """
         generates a DGGS grid and returns all the cellids as a pandas dataframe
@@ -1663,11 +1745,14 @@ class DGGRID(abc.ABC):
                     'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
                 })
 
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'point_output_type': 'TEXT',
             'cell_output_type': 'NONE',
@@ -1715,7 +1800,7 @@ class DGGRID(abc.ABC):
         mixed_aperture_level: int = None,
         split_dateline: bool = False,
         output_address_type: DggsOutputAddressTypeT | None = None,
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> gpd.GeoDataFrame:
         """
         takes a GeoDataFrame with point geometry and optional additional value columns and returns:
@@ -1741,11 +1826,14 @@ class DGGRID(abc.ABC):
             'input_address_type': 'GEO',
             'input_delimiter': "\" \""
         }
-        subset_conf.update(specify_resolution(**output_conf_extra))
-        subset_conf.update(specify_orient_type_args(**output_conf_extra))
-        subset_conf.update(specify_topo_aperture(**output_conf_extra))
+        subset_conf.update(specify_resolution(**conf_extra))
+        subset_conf.update(specify_orient_type_args(**conf_extra))
+        subset_conf.update(specify_topo_aperture(**conf_extra))
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf = {
             'output_file_name': str( (Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt").resolve()),
             'output_address_type': 'SEQNUM',
@@ -1809,7 +1897,7 @@ class DGGRID(abc.ABC):
         mixed_aperture_level: int = None,
         input_address_type: DggsInputAddressTypeT = 'SEQNUM',
         output_address_type: DggsOutputAddressTypeT = 'SEQNUM',
-        **output_conf_extra: DggridMetaConfigParameterT,
+        **conf_extra: DggridMetaConfigParameterT,
     ) -> pd.DataFrame:
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
@@ -1822,7 +1910,7 @@ class DGGRID(abc.ABC):
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
 
-        if not input_address_type in input_address_types:
+        if not input_address_type in self.input_address_types:
             raise ValueError(f"unknown input_address_type: {input_address_type}")
 
         if not output_address_type in self.output_address_types:
@@ -1837,7 +1925,10 @@ class DGGRID(abc.ABC):
             'input_delimiter': "\" \""
         }
 
-        output_extras = self.check_output_extra_fields(output_conf_extra)
+        input_extras = self.check_input_extra_fields(conf_extra)
+        subset_conf.update(input_extras)
+
+        output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'output_file_name': str( (Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt").resolve()),
             'output_address_type': output_address_type,
@@ -1867,12 +1958,24 @@ class DGGRIDv7(DGGRID):
     version = 7
     output_address_types: DggsOutputAddressTypeV7T = output_address_types_v7
     output_extra_fields = output_extra_fields_v7
+    input_address_types: DggsInputAddressTypeV7T = input_address_types_v7
+    input_extra_fields = input_extra_fields_v7
 
 
 class DGGRIDv8(DGGRID):
     version = 8
     output_address_types: DggsOutputAddressTypeV8T = output_address_types_v8
     output_extra_fields = output_extra_fields_v8
+    input_address_types: DggsInputAddressTypeV8T = input_address_types_v8
+    input_extra_fields = input_extra_fields_v8
+
+
+class AnyDGGRID(DGGRID):
+    version = 0
+    output_address_types: DggsOutputAddressTypeT = list(set(output_address_types_v7) | set(output_address_types_v8))
+    output_extra_fields = list(set(output_extra_fields_v7) | set(output_extra_fields_v8))
+    input_address_types: DggsInputAddressTypeT = list(set(input_address_types_v7) | set(input_address_types_v8))
+    input_extra_fields = list(set(input_extra_fields_v7) | set(input_extra_fields_v8))
 
 
 #############################################################
