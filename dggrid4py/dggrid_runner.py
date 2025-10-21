@@ -551,6 +551,7 @@ class Dggs:
         'dggs_vert0_lat': 'pole_lat_deg',
         'dggs_vert0_lon': 'pole_lon_deg',
         'dggs_num_aperture_4_res': 'mixed_aperture_level',
+        'res': 'resolution',
         # Add more aliases as needed
     }, init=False, repr=False)
 

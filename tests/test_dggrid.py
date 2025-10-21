@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import decimal
+import pytest
+import shapely
 
 from dggrid4py import DGGRIDv8, Dggs
 
@@ -130,4 +132,56 @@ def test_dgapi_grid_gen_params(monkeypatch):
         "neighbor_output_file_name": "test-neighbors.geojson",
         "children_output_type": "GDAL_COLLECTION",
         "children_output_file_name": "test-neighbors.geojson",
+    }
+
+
+def test_grid_cell_polygons_for_extent(monkeypatch):
+    metafile = []
+
+    def mock_dggrid_grid_gen_run(__metafile):
+        metafile[:] = __metafile
+        return -1  # cause grid_gen to early-exit in error
+
+    monkeypatch.setattr(dggrid, "run", mock_dggrid_grid_gen_run)
+
+    clip_bound = shapely.geometry.box(27.2, 57.5, 29.3, 59.2)
+    with pytest.raises(ValueError):  # catch and ignore (early-abort "run error")
+        dggrid.grid_cell_polygons_for_extent(
+            dggs_type="IGEO7",
+            resolution=3,
+            clip_geom=clip_bound
+        )
+
+    # pre-check temp file paths to ignore in check of specific values
+    meta_args = dict([line.split(" ") for line in metafile])
+    assert meta_args["clip_region_files"].startswith("/tmp/dggrid")
+    assert meta_args["cell_output_file_name"].startswith("/tmp/dggrid")
+    meta_args.pop("clip_region_files")
+    meta_args.pop("cell_output_file_name")
+    metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
+
+    assert set(metafile_patched) == {
+        "dggrid_operation GENERATE_GRID",
+        "dggs_type IGEO7",
+        "dggs_proj ISEA",
+        "dggs_aperture 7",
+        "dggs_topology HEXAGON",
+        # NOTE: 'dggs_res_spec' to be inferred from Dggs() attribute, not passing it explicitly to 'specify_resolution'
+        "dggs_res_spec 3",
+        "precision 7",
+        "clip_subset_type GDAL",
+        # "clip_region_files /tmp/dggrid/...",
+        # "cell_output_file_name /tmp/dggrid/...",
+        "cell_output_type GDAL",
+        "cell_output_gdal_format FlatGeobuf",
+        "dggs_orient_specify_type SPECIFIED",
+        "dggs_vert0_azimuth 0.0",
+        "dggs_vert0_lat 58.28252559",
+        "dggs_vert0_lon 11.25",
+        # WARNING: following technically not set by Dggs(), though it probably should for 'IGEO7' ?
+        # "output_cell_label_type OUTPUT_ADDRESS_TYPE",
+        # "output_address_type HIERNDX",
+        # "output_hier_ndx_system Z7",
+        # "output_hier_ndx_form DIGIT_STRING",
+        "point_output_type NONE"
     }
