@@ -78,4 +78,4 @@ jobs:
       - name: Run tests
         env:
           DGGRID_PATH: ${{ env.DGGRID_INSTALL_DIR }}/dggrid
-        run: pytest
+        run: poetry run pytest
