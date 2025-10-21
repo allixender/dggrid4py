@@ -149,7 +149,11 @@ def test_grid_cell_polygons_for_extent(monkeypatch):
         dggrid.grid_cell_polygons_for_extent(
             dggs_type="IGEO7",
             resolution=3,
-            clip_geom=clip_bound
+            clip_geom=clip_bound,
+            # use string to preserve precision and training zeros explicitly
+            dggs_vert0_azimuth=0.0,
+            dggs_vert0_lat="58.282525588538994675786",  # default: 58.28252559
+            dggs_vert0_lon="11.20",   # default: 11.25
         )
 
     # pre-check temp file paths to ignore in check of specific values
@@ -174,10 +178,11 @@ def test_grid_cell_polygons_for_extent(monkeypatch):
         # "cell_output_file_name /tmp/dggrid/...",
         "cell_output_type GDAL",
         "cell_output_gdal_format FlatGeobuf",
+        # following set explicitly by input parameters
         "dggs_orient_specify_type SPECIFIED",
         "dggs_vert0_azimuth 0.0",
-        "dggs_vert0_lat 58.28252559",
-        "dggs_vert0_lon 11.25",
+        "dggs_vert0_lat 58.282525588538994675786",
+        "dggs_vert0_lon 11.20",
         # WARNING: following technically not set by Dggs(), though it probably should for 'IGEO7' ?
         # "output_cell_label_type OUTPUT_ADDRESS_TYPE",
         # "output_address_type HIERNDX",

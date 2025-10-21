@@ -589,6 +589,15 @@ class Dggs:
     def metafile(self) -> DggridMetafileT:
         return copy.copy(dg_grid_meta(self))
 
+    def update(self, **kwargs):
+        """
+        Back propagate keyword parameters if they can be mapped to an attribute handled by this class.
+        """
+        for key, value in kwargs.items():
+            found = self._resolve_key(key)
+            if found:
+                self.set_par(found, value)
+
     def dg_closest_res_to_area (self, area, resround,metric,show_info=True):
         raise ValueError('not yet implemented')
 
@@ -790,6 +799,7 @@ class DGGRID(abc.ABC):
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
+        dggs.update(**subset_conf, **output_conf)
         dggs_config_meta = dggs.metafile
 
         for cmd in dggs_config_meta:
