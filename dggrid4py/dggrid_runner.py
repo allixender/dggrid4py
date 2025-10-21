@@ -551,6 +551,7 @@ class Dggs:
         'dggs_vert0_lat': 'pole_lat_deg',
         'dggs_vert0_lon': 'pole_lon_deg',
         'dggs_num_aperture_4_res': 'mixed_aperture_level',
+        'res': 'resolution',
         # Add more aliases as needed
     }, init=False, repr=False)
 
@@ -587,6 +588,15 @@ class Dggs:
     @property
     def metafile(self) -> DggridMetafileT:
         return copy.copy(dg_grid_meta(self))
+
+    def update(self, **kwargs):
+        """
+        Back propagate keyword parameters if they can be mapped to an attribute handled by this class.
+        """
+        for key, value in kwargs.items():
+            found = self._resolve_key(key)
+            if found:
+                self.set_par(found, value)
 
     def dg_closest_res_to_area (self, area, resround,metric,show_info=True):
         raise ValueError('not yet implemented')
@@ -789,6 +799,7 @@ class DGGRID(abc.ABC):
         metafile = []
         metafile.append("dggrid_operation " + dggrid_operation)
 
+        dggs.update(**subset_conf, **output_conf)
         dggs_config_meta = dggs.metafile
 
         for cmd in dggs_config_meta:
@@ -2132,7 +2143,7 @@ def specify_resolution(
     if dggs_proj is None or dggs_res_specify_type is None:
         return {}
 
-    if not proj_spec in list(dggs_projections) or not dggs_res_specify_type in dggs_res_specify_types:
+    if not dggs_proj in list(dggs_projections) or not dggs_res_specify_type in dggs_res_specify_types:
         raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
 
     if dggs_res_specify_type == "SPECIFIED":
