@@ -1,0 +1,85 @@
+name: CI Tests
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, reopened]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+    env:
+      DGGRID_REPO: https://github.com/sahrk/DGGRID.git
+      DGGRID_SOURCE_DIR: dggrid_src
+      DGGRID_INSTALL_DIR: ${{ github.workspace }}/DGGRID/bin
+      DGGRID_VERSION: v8.42
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Cache Python dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            .venv
+          key: ${{ runner.os }}-dependencies-${{ hashFiles('**/pyproject.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-dependencies
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --with test
+
+      - name: Cache DGGRID build
+        id: dggrid_cache
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.DGGRID_INSTALL_DIR }}
+          key: ${{ runner.os }}-dggrid-bin-${{ env.DGGRID_VERSION }}
+          restore-keys: |
+            ${{ runner.os }}-dggrid-bin-${{ env.DGGRID_VERSION }}
+
+      - name: Clone DGGRID
+        if: steps.dggrid_cache.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 --branch "$DGGRID_VERSION" $DGGRID_REPO $DGGRID_SOURCE_DIR
+
+      - name: Setup CMake
+        if: steps.dggrid_cache.outputs.cache-hit != 'true'
+        uses: jwlawson/actions-setup-cmake@v1
+        with:
+          cmake-version: '3.20.x'
+
+      - name: Install GDAL
+        if: steps.dggrid_cache.outputs.cache-hit != 'true'
+        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev
+
+      - name: Build DGGRID
+        if: steps.dggrid_cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ${DGGRID_INSTALL_DIR}
+          mkdir -p ${DGGRID_SOURCE_DIR}/build
+          cd ${DGGRID_SOURCE_DIR}/build
+          cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GDAL=ON ..
+          make -j$(nproc)
+          cp src/apps/dggrid/dggrid ${DGGRID_INSTALL_DIR}/
+
+      - name: Run tests
+        env:
+          DGGRID_PATH: ${{ env.DGGRID_INSTALL_DIR }}/dggrid
+        run: poetry run pytest
