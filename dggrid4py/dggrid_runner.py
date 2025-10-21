@@ -2133,7 +2133,7 @@ def specify_resolution(
     if dggs_proj is None or dggs_res_specify_type is None:
         return {}
 
-    if not proj_spec in list(dggs_projections) or not dggs_res_specify_type in dggs_res_specify_types:
+    if not dggs_proj in list(dggs_projections) or not dggs_res_specify_type in dggs_res_specify_types:
         raise ValueError("base projection (ISEA or FULLER) or resolution spec unknown")
 
     if dggs_res_specify_type == "SPECIFIED":
