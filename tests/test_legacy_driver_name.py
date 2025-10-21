@@ -14,11 +14,11 @@ working_dir_legacy = tempfile.TemporaryDirectory()
 working_dir = tempfile.TemporaryDirectory()
 
 dggrid_executable_legacy = tool.get_portable_executable('.')
-dggrid_executable=os.environ['DGGRID_PATH'] if 'DGGRID_PATH' in os.environ else shutil.which('dggrid83')
+dggrid_executable=os.environ['DGGRID_PATH'] if 'DGGRID_PATH' in os.environ else shutil.which('dggrid')
 
-portable_dggrid = DGGRIDv7(executable=dggrid_executable_legacy, working_dir=working_dir_legacy.name, capture_logs=False, silent=True, has_gdal=False,
+portable_dggrid = DGGRIDv7(executable=dggrid_executable_legacy, working_dir=working_dir_legacy.name, capture_logs=False, silent=False, has_gdal=False,
                            tmp_geo_out_legacy=True, debug=False)
-gdal_dggrid = DGGRIDv7(executable=dggrid_executable, working_dir=working_dir.name, capture_logs=False, silent=True, has_gdal=True,
+gdal_dggrid = DGGRIDv7(executable=dggrid_executable, working_dir=working_dir.name, capture_logs=False, silent=False, has_gdal=True,
                        tmp_geo_out_legacy=False, debug=False)
 
 cellids100geoms = gdal_dggrid.grid_cell_polygons_for_extent("IGEO7", 3, clip_geom=clip_bound, output_address_type='Z7_STRING')

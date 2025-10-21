@@ -130,6 +130,37 @@ comfortable geopython libraries, like shapely and geopandas
    print(children.head(3))
 
 
+   # single latittude use geographic to authalic conversion (optional, passing data from ellipsoid to the sphere)
+   # use for better accuracy on ellipsoid and with IGEO7
+   from dggrid4py.auxlat import geodetic_to_authalic, authalic_to_geodetic
+
+   clip_bound_auth = clip_bound = shapely.geometry.box(25.2, auxlat.geodetic_to_authalic(58.1), 27.3, auxlat.geodetic_to_authalic(59.2))
+
+   dggrid_instance_v8 = DGGRIDv8(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False, tmp_geo_out_legacy=False, debug=False)
+
+   output_address_kwargs= {
+      "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+      "output_address_type": "HIERNDX",
+      "output_hier_ndx_system": "Z7",
+      # "output_address_type": "Z7_STRING", in DGGRIDv9 only the new form with HIERNDX is supported
+      "output_hier_ndx_form": "DIGIT_STRING",
+      "dggs_vert0_lon": 11.20
+   }
+
+   v8_cells = dggrid_instance_v8.grid_cell_polygons_for_extent("IGEO7", resolution=9, clip_geom=clip_bound_auth, **output_address_kwargs)
+   print(v8_cells.head(3))
+
+   # geoseries bulk authalic conversion from authalic back to geodetic/geographic (wgs84)
+   # use for better accuracy on ellipsoid and with IGEO7, and of course if you passed in coordinates above from geodetic to authalic form
+   from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic
+
+   geo_polys = geoseries_to_geodetic(v8_cells.geometry)
+   v8_cells["geometry"] = geo_polys
+   v8_cells.crs = 4326
+   print(v8_cells.head(3))
+
+   
+
 IGEO7 Usage
 -----------
 
