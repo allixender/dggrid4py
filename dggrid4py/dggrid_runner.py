@@ -299,6 +299,7 @@ DggridMetaConfigT = TypedDict(
         "clip_cell_res": int,
         "clip_cell_addresses": str,
         "clip_region_files": str,
+        "clip_cell_densification": int,
         "clipper_scale_factor": float,
         "input_address_type": DggsInputAddressTypeT,
         "input_hier_ndx_form": DggsInputHierNdxFormT,
@@ -555,8 +556,14 @@ class Dggs:
         # Add more aliases as needed
     }, init=False, repr=False)
 
-    def _resolve_key(self, key: str) -> str:
+    def _resolve_key(self, key: str, strict: bool = False) -> str | None:
         # If key is an alias, return canonical; else if it's a canonical, return as is
+        if strict:
+            if key in self._aliases:
+                return self._aliases[key]
+            elif key in self.__dataclass_fields__:
+                return key
+            return None
         return self._aliases.get(key, key)
 
     def set_par(self, par_key: str, par_value: DggridMetaConfigParameterT):
@@ -589,12 +596,16 @@ class Dggs:
     def metafile(self) -> DggridMetafileT:
         return copy.copy(dg_grid_meta(self))
 
-    def update(self, **kwargs):
+    def update(self, strict=False, **kwargs):
         """
         Back propagate keyword parameters if they can be mapped to an attribute handled by this class.
+
+        :param strict:
+            If True, only keys that match existing attributes will be set.
+            If False, unknown keys will be set with provided name.
         """
         for key, value in kwargs.items():
-            found = self._resolve_key(key)
+            found = self._resolve_key(key, strict=strict)
             if found:
                 self.set_par(found, value)
 
@@ -1275,6 +1286,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
@@ -1372,6 +1384,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
@@ -1470,6 +1483,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
         seq_df = None
@@ -1506,6 +1520,12 @@ class DGGRID(abc.ABC):
                             'clip_cell_addresses' : " ".join([str(address) for address in cell_id_list])
                         }
                     )
+                    if "clip_cell_densification" in conf_extra:
+                        subset_conf.update(
+                            {
+                                'clip_cell_densification' : conf_extra['clip_cell_densification']
+                            }
+                        )
 
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1610,6 +1630,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
         seq_df = None
@@ -1737,6 +1758,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
 
@@ -1821,6 +1843,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         cols = set(geodf_points_wgs84.columns.tolist())
         cols = cols - set('geometry')
@@ -1917,6 +1940,7 @@ class DGGRID(abc.ABC):
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
 
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
