@@ -856,6 +856,9 @@ class DGGRID(abc.ABC):
 
         if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in self.input_address_types:
             metafile.append("input_address_type " + subset_conf['input_address_type'])
+            for elem in self.input_extra_fields:
+                if elem in subset_conf:
+                    metafile.append(f"{elem} {subset_conf[elem]}")
 
         # join grid gen params add to metafile
 
@@ -1675,7 +1678,6 @@ class DGGRID(abc.ABC):
 
         input_extras = self.check_input_extra_fields(conf_extra)
         subset_conf.update(input_extras)
-
         output_extras = self.check_output_extra_fields(conf_extra)
         output_conf: DggridMetaConfigT = {
             'point_output_type': 'GDAL',
