@@ -987,19 +987,22 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
 
         # transform output_types
+        output_conf = {}
         if (
-            'output_file_name' in output_conf.keys() and
-            'output_address_type' in output_conf.keys() and
-            output_conf['output_address_type'] in self.output_address_types
+            'output_file_name' in conf_extra.keys() and
+            'output_address_type' in conf_extra.keys() and
+            conf_extra['output_address_type'] in self.output_address_types
         ):
-            for elem in filter(lambda x: x.startswith('output_') , output_conf.keys()):
-                metafile.append(f"{elem} " + str(output_conf[elem]))
+            for elem in filter(lambda x: x.startswith('output_') , conf_extra.keys()):
+                output_conf[elem] = conf_extra[elem]
+                metafile.append(f"{elem} " + str(conf_extra[elem]))
         else:
             raise ValueError('no output filename or type given')
 
         output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
+                output_conf[elem] = value
                 metafile.append(f"{elem} " + str(value))
 
         result = self.run(metafile)
@@ -1077,19 +1080,22 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
 
         # transform output_types
+        output_conf = {}
         if (
-            'output_file_name' in output_conf.keys() and
-            'output_address_type' in output_conf.keys() and
-            output_conf['output_address_type'] in self.output_address_types
+            'output_file_name' in conf_extra.keys() and
+            'output_address_type' in conf_extra.keys() and
+            conf_extra['output_address_type'] in self.output_address_types
         ):
-            for elem in filter(lambda x: x.startswith('output_') , output_conf.keys()):
-                metafile.append(f"{elem} " + output_conf[elem])
+            for elem in filter(lambda x: x.startswith('output_') , conf_extra.keys()):
+                output_conf[elem] = conf_extra[elem]
+                metafile.append(f"{elem} " + conf_extra[elem])
         else:
             raise ValueError('no output filename or type given')
 
         output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
+                output_conf[elem] = conf_extra[elem]
                 metafile.append(f"{elem} " + str(value))
 
         result = self.run(metafile)
@@ -1144,19 +1150,22 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
 
         # transform output_types
+        output_conf = {}
         if (
-            'output_file_name' in output_conf.keys() and
-            'output_address_type' in output_conf.keys() and
-            output_conf['output_address_type'] in self.output_address_types
+            'output_file_name' in conf_extra.keys() and
+            'output_address_type' in conf_extra.keys() and
+            conf_extra['output_address_type'] in self.output_address_types
         ):
-            for elem in filter(lambda x: x.startswith('output_') , output_conf.keys()):
-                metafile.append(f"{elem} " + output_conf[elem])
+            for elem in filter(lambda x: x.startswith('output_') , conf_extra.keys()):
+                output_conf[elem] = conf_extra[elem]
+                metafile.append(f"{elem} " + conf_extra[elem])
         else:
             raise ValueError('no output filename or type given')
 
         output_extras = self.check_output_extra_fields(conf_extra)
         if output_extras:
             for elem, value in output_extras.items():
+                output_conf[elem] = conf_extra[elem]
                 metafile.append(f"{elem} " + str(value))
 
         result = self.run(metafile)
@@ -1848,7 +1857,7 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         cols = set(geodf_points_wgs84.columns.tolist())
-        cols = cols - set('geometry')
+        cols = cols - {'geometry'}
         geodf_points_wgs84['lon'] = geodf_points_wgs84['geometry'].x
         geodf_points_wgs84['lat'] = geodf_points_wgs84['geometry'].y
         cols_ordered = ['lon', 'lat']
@@ -1905,15 +1914,19 @@ class DGGRID(abc.ABC):
             return geodf_points_wgs84
         else:
             # grid_gen from seqnums
+            dggs_conf = dggs.to_dict()
             gdf = self.grid_cell_polygons_from_cellids(
                 cell_id_list=cell_id_list,
-                dggs_type=dggs_type,
+                # dggs_type=dggs_type,  passed via dggs_conf
                 resolution=resolution,
                 mixed_aperture_level=mixed_aperture_level,
                 input_address_type=output_address_type,
-                output_address_type=self.output_address_types,
+                output_address_type=output_address_type,
+                **dggs_conf,  # ensure any extra parameters are passed on
             )
             try:
+                # avoid conflict between input 'name' column and generated 'name' Zone ID
+                gdf.rename(columns={'name': 'zone'}, inplace=True)
                 for col in cols_ordered:
                     gdf[col] = geodf_points_wgs84[col].values
             except Exception:

@@ -1,13 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import decimal
+import os
+
 import pytest
 import shapely
+import geopandas as gpd
+from geopandas.testing import assert_geodataframe_equal
 
 from dggrid4py import DGGRIDv8, Dggs
-from dggrid4py.dggrid_runner import output_hier_ndx_forms
 
-dggrid = DGGRIDv8()
+dggrid_path = os.getenv("DGGRID_PATH")
+dggrid = DGGRIDv8(executable=dggrid_path)
+
 
 def mock_dggrid_run(__metafile):
     return 0
@@ -264,3 +269,151 @@ def test_grid_cell_polygons_from_cellids(monkeypatch):
         # "output_hier_ndx_form DIGIT_STRING",
         "point_output_type NONE"
     }
+
+
+def test_cells_for_geo_points(monkeypatch):
+    dgapi_grid_transform = dggrid.dgapi_grid_transform
+    dgapi_grid_gen = dggrid.dgapi_grid_gen
+
+    dgapi_grid_transform_metafile = []
+    dgapi_grid_transform_out_conf = {}
+
+    dgapi_grid_gen_metafile = []
+    dgapi_grid_gen_out_conf = {}
+
+    def mock_dgapi_grid_transform(*args, **kwargs):
+        _res = dgapi_grid_transform(*args, **kwargs)
+        dgapi_grid_transform_metafile[:] = _res["metafile"]
+        dgapi_grid_transform_out_conf.update(_res["output_conf"])
+        return _res
+
+    def mock_dgapi_grid_gen(*args, **kwargs):
+        _res = dgapi_grid_gen(*args, **kwargs)
+        dgapi_grid_gen_metafile[:] = _res["metafile"]
+        dgapi_grid_gen_out_conf.update(_res["output_conf"])
+        return _res
+
+    monkeypatch.setattr(dggrid, "dgapi_grid_transform", mock_dgapi_grid_transform)
+    monkeypatch.setattr(dggrid, "dgapi_grid_gen", mock_dgapi_grid_gen)
+
+    points = [shapely.Point(20.5, 57.5), shapely.Point(21.0, 58.0)]
+    geodf_points_wgs84 = gpd.GeoDataFrame({'name': ['A', 'B']}, geometry=points, crs='EPSG:4326')
+
+    result = dggrid.cells_for_geo_points(
+        geodf_points_wgs84,
+        cell_ids_only=False,
+        dggs_type="ISEA7H",
+        resolution=5,
+        # use string to preserve precision and training zeros explicitly
+        dggs_vert0_azimuth=0.0,
+        dggs_vert0_lat="58.282525588538994675786",  # default: 58.28252559
+        dggs_vert0_lon="11.20",   # default: 11.25
+    )
+
+    # pre-check temp file paths to ignore in check of specific values
+    meta_args = dict([line.split(" ", 1) for line in dgapi_grid_transform_metafile])
+    dgapi_grid_transform_input_file_name = meta_args.pop("input_file_name")
+    dgapi_grid_transform_output_file_name = meta_args.pop("output_file_name")
+    assert dgapi_grid_transform_input_file_name.startswith("/tmp/dggrid")
+    assert dgapi_grid_transform_output_file_name.startswith("/tmp/dggrid")
+    dgapi_grid_transform_metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
+
+    meta_args = dict([line.split(" ", 1) for line in dgapi_grid_gen_metafile])
+    dgapi_grid_gen_cell_output_file_name = meta_args.pop("cell_output_file_name")
+    dgapi_grid_gen_clip_region_files = meta_args.pop("clip_region_files")
+    assert dgapi_grid_gen_cell_output_file_name.startswith("/tmp/dggrid")
+    assert dgapi_grid_gen_clip_region_files.startswith("/tmp/dggrid")
+    dgapi_grid_gen_metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
+
+    assert dgapi_grid_transform_output_file_name != dgapi_grid_gen_cell_output_file_name
+
+    assert set(dgapi_grid_transform_metafile_patched) == {
+        "dggrid_operation TRANSFORM_POINTS",
+        "dggs_type ISEA7H",
+        "dggs_proj ISEA",
+        "dggs_aperture 7",
+        "dggs_topology HEXAGON",
+        "dggs_res_spec 5",
+        "precision 7",
+        # following set explicitly by input parameters
+        "dggs_orient_specify_type SPECIFIED",
+        "dggs_vert0_azimuth 0.0",
+        "dggs_vert0_lat 58.282525588538994675786",
+        "dggs_vert0_lon 11.20",
+        # following enforced by function to align with input GeoDataFrame
+        "input_address_type GEO",
+        "input_delimiter \" \"",
+        "output_address_type SEQNUM",
+        "output_delimiter \",\"",
+        # pre-checked temp file locations
+        # "input_file_name": "/tmp/dggrid/...",
+        # "output_file_name": "/tmp/dggrid/...",
+    }
+
+    assert dgapi_grid_transform_out_conf == {
+        "output_address_type": "SEQNUM",
+        "output_delimiter": "\",\"",
+        "output_file_name": dgapi_grid_transform_output_file_name,
+    }
+
+    assert set(dgapi_grid_gen_metafile_patched) == {
+        "dggrid_operation GENERATE_GRID",
+        "dggs_type ISEA7H",
+        "dggs_proj ISEA",
+        "dggs_aperture 7",
+        "dggs_topology HEXAGON",
+        "dggs_res_spec 5",
+        "precision 7",
+        # following set explicitly by input parameters
+        "dggs_orient_specify_type SPECIFIED",
+        "dggs_vert0_azimuth 0.0",
+        "dggs_vert0_lat 58.282525588538994675786",
+        "dggs_vert0_lon 11.20",
+        # following enforced by function to align with input of previous transform step
+        "clip_subset_type SEQNUMS",
+        "cell_output_type GDAL",
+        "cell_output_gdal_format FlatGeobuf",
+        "point_output_type NONE",
+        # pre-checked temp file locations
+        # "cell_output_file_name": "/tmp/dggrid/...",
+    }
+
+    assert dgapi_grid_gen_out_conf == {
+        "cell_output_type": "GDAL",
+        "cell_output_gdal_format": "FlatGeobuf",
+        "cell_output_file_name": dgapi_grid_gen_cell_output_file_name,
+        "point_output_type": "NONE",
+    }
+
+    expect = gpd.GeoDataFrame.from_features(
+        [
+            {
+                "type": "Feature",
+                "properties": {"zone": "51695", "name": "A", "lon": 20.5, "lat": 57.5},
+                "geometry": {"type": "Polygon", "coordinates": [[
+                    [21.189511635794823, 58.2893639588515],
+                    [20.950622414770574, 58.00135094074029],
+                    [21.232988751914608, 57.69437147048094],
+                    [21.74777706813212, 57.674593541688374],
+                    [21.990765226755794, 57.96161815328658],
+                    [21.71493417563983, 58.2694113005297],
+                    [21.189511635794823, 58.2893639588515],
+                ]]}
+            },
+            {
+                "type": "Feature",
+                "properties": {"zone": "51548", "name": "B", "lon": 21.0, "lat": 58.0},
+                "geometry": {"type": "Polygon", "coordinates": [[
+                    [20.430061092474467, 58.01819524792648],
+                    [20.20251122281021, 57.727966938664856],
+                    [20.491335795187357, 57.42178746002092],
+                    [21.001317147943144, 57.405038598901655],
+                    [21.232988751914608, 57.69437147048094],
+                    [20.950622414770574, 58.00135094074029],
+                    [20.430061092474467, 58.01819524792648],
+                ]]}
+            },
+        ],
+        columns=result.columns,  # ensure ordering matches to allow compare
+    )
+    assert_geodataframe_equal(result, expect)
