@@ -985,6 +985,9 @@ class DGGRID(abc.ABC):
 
         input_extras = self.check_input_extra_fields(conf_extra)
         subset_conf.update(input_extras)
+        if subset_conf:
+            for elem, value in subset_conf.items():
+                metafile.append(f"{elem} " + str(value))
 
         # transform output_types
         output_conf = {}
@@ -1078,6 +1081,9 @@ class DGGRID(abc.ABC):
 
         input_extras = self.check_input_extra_fields(conf_extra)
         subset_conf.update(input_extras)
+        if subset_conf:
+            for elem, value in subset_conf.items():
+                metafile.append(f"{elem} " + str(value))
 
         # transform output_types
         output_conf = {}
@@ -1148,6 +1154,9 @@ class DGGRID(abc.ABC):
 
         input_extras = self.check_input_extra_fields(conf_extra)
         subset_conf.update(input_extras)
+        if subset_conf:
+            for elem, value in subset_conf.items():
+                metafile.append(f"{elem} " + str(value))
 
         # transform output_types
         output_conf = {}
