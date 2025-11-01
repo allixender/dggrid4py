@@ -330,6 +330,7 @@ DggridMetaConfigT = TypedDict(
         "output_cell_label_type": DggsOutputCellLabelTypeT,
         "output_count": bool,
         "output_count_field_name": str,
+        "output_num_classes": bool,
         "output_delimiter": str,
         "output_file_name": str,
         "output_first_seqnum": int,
@@ -1158,6 +1159,17 @@ class DGGRID(abc.ABC):
             for elem, value in subset_conf.items():
                 metafile.append(f"{elem} " + str(value))
 
+        # pre-patch elements before integrating them to the metafile
+        if "output_delimiter" in conf_extra:
+            delim = conf_extra["output_delimiter"] or " "
+            delim = f'"{delim}"' if '"' not in delim else delim
+            conf_extra["output_delimiter"] = delim
+        if "cell_output_control" in conf_extra and conf_extra["cell_output_control"] not in cell_output_controls:
+            raise ValueError(f"cell_output_control must be one of: {cell_output_controls}")
+        for field in ["output_count", "output_num_classes"]:
+            if field in conf_extra:
+                conf_extra[field] = str(conf_extra[field]).upper()  # bool or string-like bool
+
         # transform output_types
         output_conf = {}
         if (
@@ -1165,7 +1177,7 @@ class DGGRID(abc.ABC):
             'output_address_type' in conf_extra.keys() and
             conf_extra['output_address_type'] in self.output_address_types
         ):
-            for elem in filter(lambda x: x.startswith('output_') , conf_extra.keys()):
+            for elem in filter(lambda x: x.startswith('output_') or x.startswith('cell_output_'), conf_extra.keys()):
                 output_conf[elem] = conf_extra[elem]
                 metafile.append(f"{elem} " + conf_extra[elem])
         else:
@@ -1175,7 +1187,7 @@ class DGGRID(abc.ABC):
         if output_extras:
             for elem, value in output_extras.items():
                 output_conf[elem] = conf_extra[elem]
-                metafile.append(f"{elem} " + str(value))
+                metafile.append(f"{elem} {value!s}")
 
         result = self.run(metafile)
 

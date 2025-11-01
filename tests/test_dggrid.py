@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import decimal
+import inspect
 import os
+import tempfile
 
 import pytest
 import shapely
@@ -138,6 +140,112 @@ def test_dgapi_grid_gen_params(monkeypatch):
         "neighbor_output_file_name": "test-neighbors.geojson",
         "children_output_type": "GDAL_COLLECTION",
         "children_output_file_name": "test-neighbors.geojson",
+    }
+
+
+def test_dgapi_pres_binning_params():
+    dggs = Dggs(
+        dggs_type="IGEO7",
+        aperture=7,
+        resolution=4,
+        precision=12,
+        densification=5,
+        pole_lon_deg="11.20",
+        pole_lat_deg=decimal.Decimal("58.282525588538994675786"),
+        azimuth_deg=0.0,
+        # geodetic_densify=0.0,  # FIXME: crashes DGGRID
+    )
+
+    input_data = inspect.cleandoc("""
+        -123.28 44.57 49900 Corvallis
+        -122.87 45.49 42300 Aloha
+        -122.77 45.43 41700 Tigard
+        -123.09 44.62 41400 Albany
+        -122.70 45.41 35700 LakeOswego
+        -123.02 45.00 32600 Keizer
+        -123.19 45.21 26800 MacMinnville
+        -122.60 45.34 26100 OregonCity
+        -123.32 42.44 23300 GrantsPass
+        -122.77 45.38 23100 Tualatin
+        -122.64 45.37 22500 WestLinn
+        -122.62 45.44 20700 Milwaukie
+        -121.17 45.60 20600 CitrusPark
+        -122.86 45.15 20400 Woodburn
+        -123.36 43.22 20300 Roseburg
+    """).splitlines()
+    input_data = [f"{line}\n" for line in input_data]
+    expect_data = inspect.cleandoc("""
+        021114,1,1
+        021116,1,1
+        014626,1,1
+    """).splitlines()
+    expect_data = [f"{line}\n" for line in expect_data]
+
+    with tempfile.NamedTemporaryFile(suffix=".txt", mode="w") as tmp_shp:
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            in_file = tmp_shp.name
+            tmp_shp.writelines(input_data)
+            tmp_shp.flush()
+            tmp_shp.seek(0)
+            tmp_out = os.path.join(tmp_dir, "out.txt")
+            result = dggrid.dgapi_pres_binning(
+                dggs,
+                {
+                    "input_file_name": in_file,
+                    "input_address_type": "GEO",  # required format
+                },
+                **{
+                    "cell_output_control": "OUTPUT_OCCUPIED",
+                    "output_delimiter": ",",  # test that it gets auto-quoted
+                    "output_num_classes": True,
+                    "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+                    "output_address_type": "HIERNDX",
+                    "output_hier_ndx_system": "Z7",
+                    "output_hier_ndx_form": "DIGIT_STRING",
+                    "output_file_name": tmp_out,
+                }
+            )
+
+            out_file = result["output_conf"]["output_file_name"]
+            with open(out_file, "r") as f:
+                output_data = f.readlines()
+            assert output_data == expect_data
+
+    assert set(result["metafile"]) == {
+        "dggrid_operation BIN_POINT_PRESENCE",
+        "dggs_type IGEO7",
+        "dggs_proj ISEA",
+        "dggs_aperture 7",
+        "dggs_topology HEXAGON",
+        "dggs_res_spec 4",
+        "precision 12",
+        "densification 5",
+        # "geodetic_densify 0.0",
+        "dggs_orient_specify_type SPECIFIED",
+        "dggs_vert0_lon 11.20",
+        "dggs_vert0_lat 58.282525588538994675786",
+        "dggs_vert0_azimuth 0.0",
+        f"input_file_name {in_file}",
+        "input_address_type GEO",
+        "cell_output_control OUTPUT_OCCUPIED",
+        "output_num_classes TRUE",
+        "output_delimiter \",\"",
+        "output_cell_label_type OUTPUT_ADDRESS_TYPE",
+        "output_address_type HIERNDX",
+        "output_hier_ndx_system Z7",
+        "output_hier_ndx_form DIGIT_STRING",
+        f"output_file_name {out_file}",
+    }
+
+    assert result["output_conf"] == {
+        "cell_output_control": "OUTPUT_OCCUPIED",
+        "output_num_classes": "TRUE",
+        "output_delimiter": '","',
+        "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+        "output_address_type": "HIERNDX",
+        "output_hier_ndx_system": "Z7",
+        "output_hier_ndx_form": "DIGIT_STRING",
+        "output_file_name": tmp_out,
     }
 
 
