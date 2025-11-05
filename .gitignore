@@ -35,6 +35,7 @@
 .spyderproject
 .spyproject
 .tox/
+.run/
 .venv
 .vscode.ws.code-workspace
 .webassets-cache
