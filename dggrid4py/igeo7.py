@@ -75,6 +75,15 @@ def z7int_to_z7hex(z7_int):
 
 
 def z7string_to_z7int(z7string):
+    """
+    Convert z7string to z7int. Inverse of decode_z7hex_index
+
+    Args:
+        z7string (str): The z7 digits representation of zone ID
+
+    Returns:
+        int: integer representation of the z7 string.
+    """
     base, digit = z7string[:2], z7string[2:]
     digit = digit.ljust(20, '7')
     binary_repr = [np.binary_repr(int(base), width=4)]
