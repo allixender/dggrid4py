@@ -16,14 +16,14 @@ import pandas as pd
 def decode_z7hex_index(z7_hex_str):
     """
     Decode a Z7 hexadecimal index (provided as hex string).
-    
+
     Format:
     - First 4 bits: base cell number (0-11)
     - Remaining 60 bits: 20 groups of 3 bits each for resolution digits (0-6, 7 for beyond resolution)
-    
+
     Args:
         z7_hex_str (str): Hexadecimal string representing the Z7 cell index
-        
+
     Returns:
         tuple: (base_cell, resolution_digits)
             - base_cell: integer 0-11
@@ -31,17 +31,17 @@ def decode_z7hex_index(z7_hex_str):
     """
     # Convert hex to binary string, ensuring we have full 64 bits
     binary = bin(int(z7_hex_str, 16))[2:].zfill(64)
-    
+
     # Extract base cell (first 4 bits)
     base_cell = int(binary[:4], 2)
-    
+
     # Extract resolution digits (20 groups of 3 bits each)
     resolution_digits = []
     for i in range(20):  # 60 remaining bits = 20 groups of 3 bits
         start = 4 + (i * 3)  # Start after the first 4 bits
         value = int(binary[start:start + 3], 2)
         resolution_digits.append(value)
-    
+
     return base_cell, resolution_digits
 
 
@@ -62,7 +62,7 @@ def z7hex_to_z7string(z7_hex_str):
     return "".join(str_rep)
 
 
-def z7hex_to_z7int( z7_hex_str):
+def z7hex_to_z7int(z7_hex_str):
     # From hex string to integer
     value = int(z7_hex_str, 16)
     return value
@@ -74,6 +74,16 @@ def z7int_to_z7hex(z7_int):
     return hex_back
 
 
+def z7string_to_z7int(z7string):
+    base, digit = z7string[:2], z7string[2:]
+    digit = digit.ljust(20, '7')
+    binary_repr = [np.binary_repr(int(base), width=4)]
+    binary_digit = [np.binary_repr(int(d), width=3) for d in digit]
+    binary_repr += binary_digit
+    binary_repr = ''.join(binary_repr)
+    return int(binary_repr, 2)
+
+
 def get_z7hex_resolution(z7_hex_str):
     """
     Get the resolution of a Z7 cell.
@@ -81,7 +91,7 @@ def get_z7hex_resolution(z7_hex_str):
     Args:
         z7_hex_str (str): Z7 hexadecimal string represention of the cell index
     """
-    base_cell, resolution_digits = decode_z7hex_index(z7_hex_str)    
+    base_cell, resolution_digits = decode_z7hex_index(z7_hex_str)
     return len( list( filter(lambda x: x >= 0 and x < 7, resolution_digits) ) )
 
 
@@ -168,5 +178,5 @@ def apply_convert_z7hex_to_z7string(z7_hex_str):
     z7_res = get_z7hex_resolution(z7_hex_str)
     parent, local_pos, is_center = get_z7hex_local_pos(z7_hex_str)
     return pd.Series([z7_string, z7_res, parent, local_pos, is_center])
-    
+
 
