@@ -531,6 +531,7 @@ class Dggs:
     pole_lat_deg: DggsDegree = 58.28252559
     pole_lon_deg: DggsDegree = 11.25
     mixed_aperture_level: int | None = None
+    clipper_scale_factor: float = 1000000
 
     _hide_metafile = [
         'metric',
