@@ -1321,24 +1321,11 @@ class DGGRID(abc.ABC):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
-
-        if not clip_geom is None and clip_geom.area > 0:
-
-            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
-            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'])
-
-            subset_conf.update({
-                'clip_subset_type': 'GDAL',
-                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
-                })
-
-            if not self.has_gdal:
-                subset_conf.update({
-                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
-                })
-
+        subset_conf: DggridMetaConfigT = {}
+        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
+                                                           **conf_extra)
+        subset_conf.update(clipper_metafile_setting)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1419,24 +1406,12 @@ class DGGRID(abc.ABC):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
-
-        if not clip_geom is None and clip_geom.area > 0:
-
-            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
-            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'] )
-
-            subset_conf.update({
-                'clip_subset_type': 'GDAL',
-                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
-            })
-
-            if not self.has_gdal:
-                subset_conf.update({
-                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
-                })
-
+        subset_conf: DggridMetaConfigT = {}
+        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
+                                                           **conf_extra)
+        subset_conf.update(clipper_metafile_setting)
+        subset_conf.update(clipper_metafile_setting)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1518,48 +1493,11 @@ class DGGRID(abc.ABC):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
+        subset_conf: DggridMetaConfigT = {}
         seq_df = None
-
-        if not cell_id_list is None and len(cell_id_list) > 0:
-
-            seq_df = pd.DataFrame({ input_address_type: cell_id_list})
-            seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=[input_address_type], sep=' ')
-
-            subset_conf.update({
-                'clip_subset_type': 'SEQNUMS',
-                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
-            })
-
-            # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
-            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
-            if (
-                input_address_type in self.input_address_types
-                and output_address_type in self.output_address_types
-            ):
-                subset_conf.update(
-                    {
-                        'clip_subset_type': 'INPUT_ADDRESS_TYPE',
-                        'input_address_type': input_address_type
-                    }
-                )
-
-                if not clip_subset_type is None and clip_subset_type in ['COARSE_CELLS']:
-                    subset_conf.update(
-                        {
-                            'clip_subset_type': clip_subset_type,
-                            'input_address_type': input_address_type,
-                            'clip_cell_res' : clip_cell_res,
-                            'clip_cell_addresses' : " ".join([str(address) for address in cell_id_list])
-                        }
-                    )
-                    if "clip_cell_densification" in conf_extra:
-                        subset_conf.update(
-                            {
-                                'clip_cell_densification' : conf_extra['clip_cell_densification']
-                            }
-                        )
-
+        clip_metafile_settings, seq_df = specify_clip_setting(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
+                                                             clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
+        subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1665,43 +1603,11 @@ class DGGRID(abc.ABC):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        subset_conf: DggridMetaConfigT = { 'update_frequency': 100000, 'clip_subset_type': clip_subset_type }
+        subset_conf: DggridMetaConfigT = {}
         seq_df = None
-
-        if not cell_id_list is None and len(cell_id_list) > 0:
-
-            seq_df = pd.DataFrame({ input_address_type: cell_id_list})
-            seq_df.to_csv( str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()) , header=False, index=False, columns=[input_address_type], sep=' ')
-
-            # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
-            subset_conf.update({
-                'clip_subset_type': 'SEQNUMS',
-                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
-            })
-
-            # TODO, for Z3, Z7, ZORDER can potentially also be COARSE_CELLS / aka parent cells?
-            # clip_subset_type should INPUT_ADDRESS_TYPE for the equivalent of SEQNUM (tp use input_address_type Z3 ...), or COARSE_CELLS as an actual parent cell type clip (also for Z3 ..)
-            if (
-                input_address_type in self.input_address_types
-                and output_address_type in self.output_address_types
-            ):
-                subset_conf.update(
-                    {
-                        'clip_subset_type': 'INPUT_ADDRESS_TYPE',
-                        'input_address_type': input_address_type
-                    }
-                )
-
-                if not clip_subset_type is None and clip_subset_type in ['COARSE_CELLS']:
-                    subset_conf.update(
-                        {
-                            'clip_subset_type': clip_subset_type,
-                            'input_address_type': input_address_type,
-                            'clip_cell_res' : clip_cell_res,
-                            'clip_cell_addresses' : " ".join([str(address) for address in cell_id_list])
-                        }
-                    )
-
+        clip_metafile_settings, seq_df = specify_clip_setting(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
+                                                             clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
+        subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1792,24 +1698,11 @@ class DGGRID(abc.ABC):
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        subset_conf = { 'update_frequency': 100000, 'clip_subset_type': 'WHOLE_EARTH' }
-
-        if not clip_geom is None and clip_geom.area > 0:
-
-            clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id' : [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
-            clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}"
-            clip_gdf.to_file(str(clip_path), driver=self.tmp_geo_out['driver'] )
-
-            subset_conf.update({
-                'clip_subset_type': 'GDAL',
-                'clip_region_files': str( (Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}").resolve()),
-                })
-
-            if not self.has_gdal:
-                subset_conf.update({
-                    'clip_subset_type': cast(DggsClipSubsetTypeT, self.tmp_geo_out['legacy_driver'].upper())
-                })
-
+        subset_conf: DggridMetaConfigT = {}
+        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
+                                                           **conf_extra)
+        subset_conf.update(clipper_metafile_setting)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -2226,6 +2119,68 @@ def specify_resolution(
         }
 
     return {}
+
+
+def specify_clip_setting(
+    clip_subset_type: DggsClipSubsetTypeT = 'WHOLE_EARTH',
+    tmp_dir: str = None,
+    tmp_id: uuid = None,
+    tmp_geo_out: dict = None,
+    clip_geom: AnyGeometry = None,
+    input_address_type: str = "SEQNUM",
+    has_gdal: bool = True,
+    clip_cell_res: int = None,
+    cell_id_list: list = None,
+    dggs_res_spec: int = 9,
+    **conf_extra: DggridMetaConfigParameterT,
+) -> DggridMetaConfigT:
+
+    clip_metafile_settings = {"update_frequency": 100000, "clip_subset_type": clip_subset_type}
+    # Adjust the clipper_scale_factor for refinement level >= 16
+    # https://github.com/sahrk/DGGRID/issues/97#issuecomment-3642871117
+    rf_level_scalefactor = {17: 10000000, 18: 100000000,
+                            19: 1000000000, 20: 10000000000}
+    # handling grid_cell_polygons/centroids_from_cellids  where clip_subset_type != COARSE_CELLS
+    seq_df = None
+    if (cell_id_list is not None and len(cell_id_list) > 0):
+        if (tmp_id is None or tmp_dir is None):
+            raise ValueError("Either tmp dir or tmp id is not set")
+        seq_df = pd.DataFrame({input_address_type: cell_id_list})
+        seq_df.to_csv(str((Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
+                      header=False, index=False, columns=[input_address_type], sep=' ')
+        clip_metafile_settings.update({'clip_region_files': str((Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve())})
+        if (input_address_type == "SEQNUM"):
+            clip_metafile_settings.update({'clip_subset_type': 'SEQNUMS'})
+        if (input_address_type != "SEQNUM"):
+            clip_metafile_settings.update({'clip_subset_type': 'INPUT_ADDRESS_TYPE'})
+            clip_metafile_settings.update({'input_address_type': input_address_type})
+            if (clip_subset_type == "COARSE_CELLS"):
+                clip_metafile_settings.update({'clip_subset_type': 'COARSE_CELLS'})
+                clip_metafile_settings.update({'clip_cell_res': clip_cell_res})
+                clip_metafile_settings.update({'clip_cell_addresses': " ".join([str(address) for address in cell_id_list])})
+                if "clip_cell_densification" in conf_extra:
+                    clip_metafile_settings.update({'clip_cell_densification': conf_extra['clip_cell_densification']})
+        return clip_metafile_settings, seq_df
+
+    # handling grid_cell_polygons/centroids_for_extent, grid_cellids_for_extent
+    if clip_geom is not None and clip_geom.area > 0:
+        if (tmp_id is None or tmp_dir is None or tmp_geo_out is None):
+            raise ValueError("Either tmp dir or tmp id is not set")
+        if has_gdal:
+            clip_metafile_settings.update({'clip_subset_type': 'GDAL'})
+        else:
+            clip_metafile_settings.update({'clip_subset_type': cast(DggsClipSubsetTypeT, tmp_geo_out['legacy_driver'].upper())})
+        clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id': [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
+        clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}"
+        clip_gdf.to_file(str(clip_path), driver=tmp_geo_out['driver'])
+        clip_metafile_settings.update({'clip_region_files':
+                                       str((Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}").resolve())})
+        if (dggs_res_spec >= 16 and dggs_res_spec <= 20):
+            clip_metafile_settings.update({'clipper_scale_factor': rf_level_scalefactor[dggs_res_spec]})
+        return clip_metafile_settings, seq_df
+
+    return clip_metafile_settings, seq_df
+
 
 
 def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
