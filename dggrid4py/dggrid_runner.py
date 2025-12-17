@@ -2130,7 +2130,7 @@ def specify_clip_settings(
     tmp_dir: str = None,
     tmp_id: uuid = None,
     tmp_geo_out: dict = None,
-    clip_geom: AnyGeometry = None,
+    clip_geom: "AnyGeometry" = None,
     input_address_type: str = "SEQNUM",
     has_gdal: bool = True,
     clip_cell_res: int = None,
