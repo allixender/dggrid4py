@@ -1326,9 +1326,9 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                            clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
-                                                            **conf_extra)
+        clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                             clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
+                                                             **conf_extra)
         subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1410,9 +1410,9 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
-                                                           **conf_extra)
+        clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                             clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
+                                                             **conf_extra)
         subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1497,9 +1497,9 @@ class DGGRID(abc.ABC):
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
-        clip_metafile_settings, seq_df = specify_clip_setting(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
-                                                              clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                              resolution=resolution, **conf_extra)
+        clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
+                                                               clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
+                                                               resolution=resolution, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1608,8 +1608,8 @@ class DGGRID(abc.ABC):
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
-        clip_metafile_settings, seq_df = specify_clip_setting(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
-                                                             clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
+        clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
+                                                               clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1702,9 +1702,9 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
-                                                           **conf_extra)
+        clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                             clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
+                                                             **conf_extra)
         subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -2125,7 +2125,7 @@ def specify_resolution(
     return {}
 
 
-def specify_clip_setting(
+def specify_clip_settings(
     clip_subset_type: DggsClipSubsetTypeT = 'WHOLE_EARTH',
     tmp_dir: str = None,
     tmp_id: uuid = None,
