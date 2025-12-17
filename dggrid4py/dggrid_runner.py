@@ -855,6 +855,10 @@ class DGGRID(abc.ABC):
         else:
             raise ValueError('something is not correct in subset_conf')
 
+        # clipper_scale_factor
+        if subset_conf.get("clipper_scale_factor"):
+            metafile.append("clipper_scale_factor " + subset_conf['clipper_scale_factor'])
+
         if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in self.input_address_types:
             metafile.append("input_address_type " + subset_conf['input_address_type'])
             for elem in self.input_extra_fields:
@@ -1322,10 +1326,10 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
-                                                           **conf_extra)
-        subset_conf.update(clipper_metafile_setting)
+        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                            clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
+                                                            **conf_extra)
+        subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1354,7 +1358,6 @@ class DGGRID(abc.ABC):
         else:
             if self.debug:
                 print(f"ignoring unknown output_address_type: {output_address_type}")
-
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
         if self.debug:
             print(dggs_ops)
@@ -1407,11 +1410,10 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
+        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
                                                            **conf_extra)
-        subset_conf.update(clipper_metafile_setting)
-        subset_conf.update(clipper_metafile_setting)
+        subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1496,7 +1498,8 @@ class DGGRID(abc.ABC):
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_setting(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
-                                                             clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
+                                                              clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
+                                                              resolution=resolution, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1699,10 +1702,10 @@ class DGGRID(abc.ABC):
         dggs.update(**conf_extra, strict=True)
 
         subset_conf: DggridMetaConfigT = {}
-        clipper_metafile_setting, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
-                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, dggs_res_spec=resolution,
+        clipper_metafile_settings, _ = specify_clip_setting(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
+                                                           clip_geom=clip_geom, has_gdal=self.has_gdal, resolution=resolution,
                                                            **conf_extra)
-        subset_conf.update(clipper_metafile_setting)
+        subset_conf.update(clipper_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
         subset_conf.update(specify_topo_aperture(**conf_extra))
@@ -1829,12 +1832,13 @@ class DGGRID(abc.ABC):
         else:
             # grid_gen from seqnums
             dggs_conf = dggs.to_dict()
+            new_input_address_type = output_address_type if (output_address_type is not None) else "SEQNUM"
             gdf = self.grid_cell_polygons_from_cellids(
                 cell_id_list=cell_id_list,
                 # dggs_type=dggs_type,  passed via dggs_conf
                 resolution=resolution,
                 mixed_aperture_level=mixed_aperture_level,
-                input_address_type=output_address_type,
+                input_address_type=new_input_address_type,
                 output_address_type=output_address_type,
                 **dggs_conf,  # ensure any extra parameters are passed on
             )
@@ -2131,15 +2135,15 @@ def specify_clip_setting(
     has_gdal: bool = True,
     clip_cell_res: int = None,
     cell_id_list: list = None,
-    dggs_res_spec: int = 9,
+    resolution: int = 9,
     **conf_extra: DggridMetaConfigParameterT,
 ) -> DggridMetaConfigT:
 
     clip_metafile_settings = {"update_frequency": 100000, "clip_subset_type": clip_subset_type}
     # Adjust the clipper_scale_factor for refinement level >= 16
     # https://github.com/sahrk/DGGRID/issues/97#issuecomment-3642871117
-    rf_level_scalefactor = {17: 10000000, 18: 100000000,
-                            19: 1000000000, 20: 10000000000}
+    rf_level_scalefactor = {17: "10000000", 18: "100000000",
+                            19: "1000000000", 20: "10000000000"}
     # handling grid_cell_polygons/centroids_from_cellids  where clip_subset_type != COARSE_CELLS
     seq_df = None
     if (cell_id_list is not None and len(cell_id_list) > 0):
@@ -2160,6 +2164,8 @@ def specify_clip_setting(
                 clip_metafile_settings.update({'clip_cell_addresses': " ".join([str(address) for address in cell_id_list])})
                 if "clip_cell_densification" in conf_extra:
                     clip_metafile_settings.update({'clip_cell_densification': conf_extra['clip_cell_densification']})
+                if (resolution >= 17 and resolution <= 20):
+                    clip_metafile_settings.update({'clipper_scale_factor': rf_level_scalefactor[resolution]})
         return clip_metafile_settings, seq_df
 
     # handling grid_cell_polygons/centroids_for_extent, grid_cellids_for_extent
@@ -2175,8 +2181,8 @@ def specify_clip_setting(
         clip_gdf.to_file(str(clip_path), driver=tmp_geo_out['driver'])
         clip_metafile_settings.update({'clip_region_files':
                                        str((Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}").resolve())})
-        if (dggs_res_spec >= 16 and dggs_res_spec <= 20):
-            clip_metafile_settings.update({'clipper_scale_factor': rf_level_scalefactor[dggs_res_spec]})
+        if (resolution >= 17 and resolution <= 20):
+            clip_metafile_settings.update({'clipper_scale_factor': rf_level_scalefactor[resolution]})
         return clip_metafile_settings, seq_df
 
     return clip_metafile_settings, seq_df
