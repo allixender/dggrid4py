@@ -816,7 +816,7 @@ class DGGRID(abc.ABC):
             metafile.append(cmd)
 
         # clip_subset_types
-        if subset_conf.get['clip_subset_type']:
+        if subset_conf.get("clip_subset_type"):
             if subset_conf['clip_subset_type'] == 'WHOLE_EARTH':
                 metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
             elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
