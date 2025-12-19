@@ -30,12 +30,10 @@ import fiona
 import geopandas as gpd
 from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
 
-if TYPE_CHECKING:
-    # place here to avoid imposing 'shapely' if not installed, but supported interface
-    from geopandas.base import GeometryArray
-    from shapely.geometry.base import BaseGeometry  # noqa
+from geopandas.base import GeometryArray
+from shapely.geometry.base import BaseGeometry  # noqa
 
-    AnyGeometry = BaseGeometry | GeometryArray
+AnyGeometry = BaseGeometry | GeometryArray
 
 
 fiona_drivers = fiona.supported_drivers
@@ -818,46 +816,46 @@ class DGGRID(abc.ABC):
             metafile.append(cmd)
 
         # clip_subset_types
-        if subset_conf['clip_subset_type'] == 'WHOLE_EARTH':
-            metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
-        elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
-            metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
-            metafile.append("clip_region_files " + subset_conf['clip_region_files'])
-        elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE'] and not subset_conf['clip_region_files'] is None:
-            if not dggs.dggs_type in ['PLANETRISK']:
-                # metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
-                # metafile.append("clip_region_files " + subset_conf['clip_region_files'])
-                # COARSE_CELLS needs clip_cell_res
-                for elem in filter(lambda x: x.startswith('clip_') , subset_conf.keys()):
-                    metafile.append(f"{elem} " + str(subset_conf[elem]))
-
-            else:
-                # if dggs_aperture_type would be SEQUENCE
-                # have to reset to WHOLE_EARTH and clip based on
-                # output_first_seqnum and output_last_seqnum
-                # this should now almost never happen
-                subset_conf['clip_subset_type'] = 'WHOLE_EARTH'
+        if subset_conf.get['clip_subset_type']:
+            if subset_conf['clip_subset_type'] == 'WHOLE_EARTH':
                 metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
-                # loading seqnums
-                files = subset_conf['clip_region_files'].split(' ')
-                seqnums = []
-                for file in files:
-                    seqs = pd.read_csv( file, header=None)[0].values
-                    seqnums.append(seqs.min())
-                    seqnums.append(seqs.max())
+            elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
+                metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
+                metafile.append("clip_region_files " + subset_conf['clip_region_files'])
+            elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE'] and not subset_conf['clip_region_files'] is None:
+                if not dggs.dggs_type in ['PLANETRISK']:
+                    # metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
+                    # metafile.append("clip_region_files " + subset_conf['clip_region_files'])
+                    # COARSE_CELLS needs clip_cell_res
+                    for elem in filter(lambda x: x.startswith('clip_') , subset_conf.keys()):
+                        metafile.append(f"{elem} " + str(subset_conf[elem]))
 
-                first_seqnum = np.array(seqnums).min()
-                last_seqnum = np.array(seqnums).max()
-                subset_conf['output_first_seqnum'] = first_seqnum
-                metafile.append("output_first_seqnum " + str(subset_conf['output_first_seqnum']))
-                subset_conf['output_last_seqnum'] = last_seqnum
-                metafile.append("output_last_seqnum " + str(subset_conf['output_last_seqnum']))
-        else:
-            raise ValueError('something is not correct in subset_conf')
+                else:
+                    # if dggs_aperture_type would be SEQUENCE
+                    # have to reset to WHOLE_EARTH and clip based on
+                    # output_first_seqnum and output_last_seqnum
+                    # this should now almost never happen
+                    subset_conf['clip_subset_type'] = 'WHOLE_EARTH'
+                    metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
+                    # loading seqnums
+                    files = subset_conf['clip_region_files'].split(' ')
+                    seqnums = []
+                    for file in files:
+                        seqs = pd.read_csv( file, header=None)[0].values
+                        seqnums.append(seqs.min())
+                        seqnums.append(seqs.max())
 
-        # clipper_scale_factor
-        if subset_conf.get("clipper_scale_factor"):
-            metafile.append("clipper_scale_factor " + subset_conf['clipper_scale_factor'])
+                    first_seqnum = np.array(seqnums).min()
+                    last_seqnum = np.array(seqnums).max()
+                    subset_conf['output_first_seqnum'] = first_seqnum
+                    metafile.append("output_first_seqnum " + str(subset_conf['output_first_seqnum']))
+                    subset_conf['output_last_seqnum'] = last_seqnum
+                    metafile.append("output_last_seqnum " + str(subset_conf['output_last_seqnum']))
+            else:
+                raise ValueError('something is not correct in subset_conf')
+            # clipper_scale_factor
+            if subset_conf.get("clipper_scale_factor"):
+                metafile.append("clipper_scale_factor " + subset_conf['clipper_scale_factor'])
 
         if 'input_address_type' in subset_conf.keys() and subset_conf.get('input_address_type', 'NOPE') in self.input_address_types:
             metafile.append("input_address_type " + subset_conf['input_address_type'])
@@ -1310,7 +1308,7 @@ class DGGRID(abc.ABC):
         dggs_type: DggsTypeT,
         resolution: int,
         mixed_aperture_level: int = None,
-        clip_geom: "AnyGeometry" = None,
+        clip_geom: AnyGeometry = None,
         split_dateline: bool = False,
         output_address_type: DggsOutputAddressTypeT | None = None,
         **conf_extra: DggridMetaConfigParameterT,
@@ -1395,7 +1393,7 @@ class DGGRID(abc.ABC):
         dggs_type: DggsTypeT,
         resolution: int,
         mixed_aperture_level: int = None,
-        clip_geom: "AnyGeometry" = None,
+        clip_geom: AnyGeometry = None,
         output_address_type: DggsOutputAddressTypeT | None = None,
         **conf_extra: DggridMetaConfigParameterT,
     ) -> gpd.GeoDataFrame:
@@ -1686,7 +1684,7 @@ class DGGRID(abc.ABC):
         dggs_type: DggsTypeT,
         resolution: int,
         mixed_aperture_level: int = None,
-        clip_geom: "AnyGeometry" = None,
+        clip_geom: AnyGeometry = None,
         output_address_type: DggsOutputAddressTypeT | None = None,
         **conf_extra: DggridMetaConfigParameterT,
     ) -> pd.DataFrame:
@@ -2130,7 +2128,7 @@ def specify_clip_settings(
     tmp_dir: str = None,
     tmp_id: uuid = None,
     tmp_geo_out: dict = None,
-    clip_geom: "AnyGeometry" = None,
+    clip_geom: AnyGeometry = None,
     input_address_type: str = "SEQNUM",
     has_gdal: bool = True,
     clip_cell_res: int = None,
