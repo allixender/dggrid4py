@@ -990,7 +990,8 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
         if subset_conf:
             for elem, value in subset_conf.items():
-                metafile.append(f"{elem} " + str(value))
+                if (value is not None):
+                    metafile.append(f"{elem} " + str(value))
 
         # transform output_types
         output_conf = {}
