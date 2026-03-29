@@ -2180,7 +2180,9 @@ def specify_clip_settings(
         clip_gdf.to_file(str(clip_path), driver=tmp_geo_out['driver'])
         clip_metafile_settings.update({'clip_region_files':
                                        str((Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}").resolve())})
-        if (resolution >= 17 and resolution <= 20):
+        if "clipper_scale_factor" in conf_extra:
+            clip_metafile_settings.update({'clipper_scale_factor': str(conf_extra["clipper_scale_factor"])})
+        elif (resolution >= 17 and resolution <= 20):
             clip_metafile_settings.update({'clipper_scale_factor': rf_level_scalefactor[resolution]})
         return clip_metafile_settings, seq_df
 
