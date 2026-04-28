@@ -13,4 +13,4 @@ import dggrid4py.igeo7 as igeo7
 import dggrid4py.tool as tool
 from .auxlat import geoseries_to_authalic, geoseries_to_geodetic, geodetic_to_authalic, authalic_to_geodetic
 
-__version__ = "0.5.3"
+__version__ = "0.6.0.dev1"
