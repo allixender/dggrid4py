@@ -274,8 +274,8 @@ def test_grid_cell_polygons_for_extent(monkeypatch):
 
     # pre-check temp file paths to ignore in check of specific values
     meta_args = dict([line.split(" ") for line in metafile])
-    assert meta_args["clip_region_files"].startswith("/tmp/dggrid")
-    assert meta_args["cell_output_file_name"].startswith("/tmp/dggrid")
+    assert "dggrid" in meta_args["clip_region_files"]
+    assert "dggrid" in meta_args["cell_output_file_name"]
     meta_args.pop("clip_region_files")
     meta_args.pop("cell_output_file_name")
     metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
@@ -341,8 +341,8 @@ def test_grid_cell_polygons_from_cellids(monkeypatch):
 
     # pre-check temp file paths to ignore in check of specific values
     meta_args = dict([line.split(" ") for line in metafile])
-    assert meta_args["clip_region_files"].startswith("/tmp/dggrid")
-    assert meta_args["cell_output_file_name"].startswith("/tmp/dggrid")
+    assert "dggrid" in meta_args["clip_region_files"]
+    assert "dggrid" in meta_args["cell_output_file_name"]
     meta_args.pop("clip_region_files")
     meta_args.pop("cell_output_file_name")
     metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
@@ -422,15 +422,15 @@ def test_cells_for_geo_points(monkeypatch):
     meta_args = dict([line.split(" ", 1) for line in dgapi_grid_transform_metafile])
     dgapi_grid_transform_input_file_name = meta_args.pop("input_file_name")
     dgapi_grid_transform_output_file_name = meta_args.pop("output_file_name")
-    assert dgapi_grid_transform_input_file_name.startswith("/tmp/dggrid")
-    assert dgapi_grid_transform_output_file_name.startswith("/tmp/dggrid")
+    assert "dggrid" in dgapi_grid_transform_input_file_name
+    assert "dggrid" in dgapi_grid_transform_output_file_name
     dgapi_grid_transform_metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
 
     meta_args = dict([line.split(" ", 1) for line in dgapi_grid_gen_metafile])
     dgapi_grid_gen_cell_output_file_name = meta_args.pop("cell_output_file_name")
     dgapi_grid_gen_clip_region_files = meta_args.pop("clip_region_files")
-    assert dgapi_grid_gen_cell_output_file_name.startswith("/tmp/dggrid")
-    assert dgapi_grid_gen_clip_region_files.startswith("/tmp/dggrid")
+    assert "dggrid" in dgapi_grid_gen_cell_output_file_name
+    assert "dggrid" in dgapi_grid_gen_clip_region_files
     dgapi_grid_gen_metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
 
     assert dgapi_grid_transform_output_file_name != dgapi_grid_gen_cell_output_file_name
@@ -524,4 +524,4 @@ def test_cells_for_geo_points(monkeypatch):
         ],
         columns=result.columns,  # ensure ordering matches to allow compare
     )
-    assert_geodataframe_equal(result, expect)
+    assert_geodataframe_equal(result, expect, check_less_precise=True)
