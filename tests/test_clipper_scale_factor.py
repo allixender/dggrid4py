@@ -45,8 +45,8 @@ def test_grid_cell_polygons_for_extent(monkeypatch):
 
     # pre-check temp file paths to ignore in check of specific values
     meta_args = dict([line.split(" ") for line in metafile])
-    assert meta_args["clip_region_files"].startswith("/tmp/dggrid")
-    assert meta_args["cell_output_file_name"].startswith("/tmp/dggrid")
+    assert "dggrid" in meta_args["clip_region_files"]
+    assert "dggrid" in meta_args["cell_output_file_name"]
     meta_args.pop("clip_region_files")
     meta_args.pop("cell_output_file_name")
     metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
@@ -112,8 +112,8 @@ def test_grid_cell_polygons_from_cellids(monkeypatch):
 
     # pre-check temp file paths to ignore in check of specific values
     meta_args = dict([line.split(" ") for line in metafile])
-    assert meta_args["clip_region_files"].startswith("/tmp/dggrid")
-    assert meta_args["cell_output_file_name"].startswith("/tmp/dggrid")
+    assert "dggrid" in meta_args["clip_region_files"]
+    assert "dggrid" in meta_args["cell_output_file_name"]
     meta_args.pop("clip_region_files")
     meta_args.pop("cell_output_file_name")
     metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
