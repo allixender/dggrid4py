@@ -25,7 +25,7 @@ from typing import Iterable, Literal, Sequence, TypedDict, cast, get_args, TYPE_
 
 import numpy as np
 import pandas as pd
-import fiona
+import pyogrio
 
 import geopandas as gpd
 from .interrupt import crosses_interruption, interrupt_cell, get_geom_coords
@@ -36,7 +36,7 @@ from shapely.geometry.base import BaseGeometry  # noqa
 AnyGeometry = BaseGeometry | GeometryArray
 
 
-fiona_drivers = fiona.supported_drivers
+fiona_drivers = pyogrio.list_drivers()
 
 # SHAPEFILE is included more natively in DGGRID than GeoJSON (esp. as clip_subset_type)
 def get_geo_out(legacy=True, has_gdal=True):
@@ -701,7 +701,7 @@ class DGGRID(abc.ABC):
         if self.has_gdal:
             print(f"GDAL types should be possible: has GDAL={self.has_gdal}")
             print("check your dggrid binary | mac: otool -L | Linux ldd ")
-            print(fiona_drivers)
+            print(pyogrio.list_drivers())
 
         else:
             print(f"GDAL types should not be used: has GDAL={self.has_gdal}")
@@ -1362,7 +1362,7 @@ class DGGRID(abc.ABC):
             print(dggs_ops)
 
         path = Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}"
-        gdf = gpd.read_file(path.resolve(), driver=self.tmp_geo_out['driver'])
+        gdf = gpd.read_file(path.resolve(), driver=self.tmp_geo_out['driver'], engine="pyogrio")
 
         if not self.debug:
             try:
@@ -1446,7 +1446,7 @@ class DGGRID(abc.ABC):
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'], engine="pyogrio" )
 
         if not self.debug:
             try:
@@ -1533,7 +1533,7 @@ class DGGRID(abc.ABC):
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'], engine="pyogrio" )
 
         if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
@@ -1643,7 +1643,7 @@ class DGGRID(abc.ABC):
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'] )
+        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", driver=self.tmp_geo_out['driver'], engine="pyogrio" )
 
         if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
@@ -2177,7 +2177,7 @@ def specify_clip_settings(
             clip_metafile_settings.update({'clip_subset_type': cast(DggsClipSubsetTypeT, tmp_geo_out['legacy_driver'].upper())})
         clip_gdf = gpd.GeoDataFrame(pd.DataFrame({'id': [1], 'geometry': [clip_geom]}), geometry='geometry', crs=4326)
         clip_path = Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}"
-        clip_gdf.to_file(str(clip_path), driver=tmp_geo_out['driver'])
+        clip_gdf.to_file(str(clip_path), driver=tmp_geo_out['driver'], engine="pyogrio")
         clip_metafile_settings.update({'clip_region_files':
                                        str((Path(tmp_dir) / f"temp_clip_{tmp_id}.{tmp_geo_out['ext']}").resolve())})
         if "clipper_scale_factor" in conf_extra:
