@@ -64,7 +64,7 @@ Then we create a ``meta_config`` dictionary for use by DGGRIDv8's functions. Thi
         "dggs_vert0_lon": 11.20
     }
 
-Then we can use the ``grid_cell_polygons_for_extent`` function to generate **IGEO7** cells using the **Z7** indexing system for an extent. However, as mentioned above, ``DGGRID (version <0.9)`` uses an authalic sphere as the Earth's reference model, so passing geopoints or extents in WGS84 using an ellipsoid as the reference model causes discrepancies. Therefore, we need to convert the input coordinates from WGS84 to authalic for input to the functions, and converting the output back from authalic to WGS84. Users can perform the conversion using  ``geoseries_to_authalic`` and ``geoseries_to_geodetic`` from ``dggrid4py.auxlat``.
+Then we can use the ``grid_cell_polygons_for_extent`` function to generate **IGEO7** cells using the **Z7** indexing system for an extent. However, as mentioned above, ``DGGRID`` (as of current version 8.43) uses an authalic sphere as the Earth's reference model, so passing geopoints or extents in WGS84 using an ellipsoid as the reference model causes discrepancies. Therefore, we need to convert the input coordinates from WGS84 to authalic for input to the functions, and converting the output back from authalic to WGS84. Users can perform the conversion using  ``geoseries_to_authalic`` and ``geoseries_to_geodetic`` from ``dggrid4py.auxlat``.
 
 .. code:: python
 
