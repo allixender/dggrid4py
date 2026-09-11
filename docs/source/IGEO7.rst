@@ -30,9 +30,9 @@ In practice this means that IGEO7 as described in the original publication is no
 We hope to make the required changes available in DGGRID in the future, so that now further confusions can arise. Until then, there might 
 be two slightly different IGEO7 implementations in use and implementers shall be explicit. 
 
-Example of how to generate cells in IGEO7 DGGRS with Z7 indexing system using dggrid4py
----------------------------------------------------------------------------------------
-In this example, we demonstrate how to use ``dggrid4py`` to generate cells in **IGEO7** DGGRS with **Z7** indexing system for an input extent in WGS84. The ``DGGRID`` version we use in this example is ``8.43``. 
+Example of how to generate cells in IGEO7 DGGRS with the Z7 indexing system using dggrid4py
+-------------------------------------------------------------------------------------------
+In this example, we demonstrate how to use ``dggrid4py`` to generate cells in **IGEO7** DGGRS with the **Z7** indexing system for an input extent in WGS84. The ``DGGRID`` version we use in this example is ``8.43``. 
 
 First, we instantiate a DGGRIDv8 object from dggrid4py. 
 
@@ -68,15 +68,17 @@ Then we can use the ``grid_cell_polygons_for_extent`` function to generate **IGE
 
 .. code:: python
 
-    # Tartu, around 50 km^2
-    extent = GeoSeries([shapely.box(26.664593, 58.348705, 26.785607, 58.422495)])
+    # Tartu bbox in wgs84, around 50 km^2
+    extent = GeoSeries([shapely.box(26.664593, 58.348705, 26.785607, 58.422495)], crs="wgs84")
 
+    # convert the extent in wgs84 to authalic sphere
     extent = geoseries_to_authalic(extent)
-    # generate IGE7 cells for the extent, passing the meta_config dictionary
 
+    # generate IGEO7 cells with Z7 zone ID for the extent, by passing the meta_config dictionary to specify 
+    # the parameters
     igeo7_cells_df = dggrid_instance.grid_cell_polygons_for_extent(dggs_type="IGEO7", resolution=12, clip_geom=extent.geometry[0], **meta_config)
 
-    # convert the cell geometries to wgs84
+    # convert the cell geometries back to wgs84
     igeo7_cells_df['geometry'] = geoseries_to_geodetic(igeo7_cells_df['geometry'])
 
 
