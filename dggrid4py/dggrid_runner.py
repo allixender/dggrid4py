@@ -293,6 +293,8 @@ DggridMetaConfigT = TypedDict(
         "dggs_vert0_lon": DggsDegree,
         "dggs_vert0_lat": DggsDegree,
         "dggs_vert0_azimuth": DggsDegree,
+        "region_center_lon": DggsDegree,
+        "region_center_lat": DggsDegree,
         "geodetic_densify": float,
         "densification": int,
         "precision": int,
@@ -1095,7 +1097,8 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
         if subset_conf:
             for elem, value in subset_conf.items():
-                metafile.append(f"{elem} " + str(value))
+                if value is not None:
+                    metafile.append(f"{elem} " + str(value))
 
         # transform output_types
         output_conf = {}
@@ -1168,7 +1171,8 @@ class DGGRID(abc.ABC):
         subset_conf.update(input_extras)
         if subset_conf:
             for elem, value in subset_conf.items():
-                metafile.append(f"{elem} " + str(value))
+                if value is not None:
+                    metafile.append(f"{elem} " + str(value))
 
         # pre-patch elements before integrating them to the metafile
         if "output_delimiter" in conf_extra:
@@ -1959,45 +1963,84 @@ below is an earlier attempt on custom DGGS configuration, currently we only bare
 """
 
 
+def _check_degree(name: str, value: DggsDegree, lower: float, upper: float) -> None:
+    try:
+        val = decimal.Decimal(str(value))
+    except decimal.InvalidOperation:
+        raise ValueError(f"{name} must be a number, got {value!r}") from None
+    if not val.is_finite() or val < lower or val > upper:
+        raise ValueError(f"{name} must be in range [{lower},{upper}], got {value!r}")
+
+
 def specify_orient_type_args(
     # use official DGGRID parameter names to map directly by keyword unpacking
     # note: first 3 are placed in the same order as originals to handle positional invocation seamlessly
-    dggs_orient_specify_type=None,
+    dggs_orient_specify_type: DggsOrientSpecifyTypesT | None = None,
     dggs_vert0_lon: DggsDegree = None,
     dggs_vert0_lat: DggsDegree = None,
     dggs_vert0_azimuth: DggsDegree = None,
-    dggs_orient_rand_seed=42,
+    dggs_orient_rand_seed: int = 42,
+    region_center_lon: DggsDegree = None,
+    region_center_lat: DggsDegree = None,
     # backward compatibility parameters
     orient_type=None,
     **_,  # ignore unknowns
 ) -> DggridMetaConfigT:
+    """
+    Build the DGGRID orientation parameters.
+
+    Only parameters that are set are returned, so DGGRID falls back to its own defaults for the others
+    (e.g. passing only ``dggs_vert0_lon=11.20`` keeps the default ``dggs_vert0_lat`` and ``dggs_vert0_azimuth``).
+    Values are passed through unchanged, so strings can be used to keep full precision.
+
+    - ``SPECIFIED`` (implied when any ``dggs_vert0_*`` is set): ``dggs_vert0_lon``, ``dggs_vert0_lat``, ``dggs_vert0_azimuth``
+    - ``RANDOM``: ``dggs_orient_rand_seed``
+    - ``REGION_CENTER``: ``region_center_lon``, ``region_center_lat``
+    - nothing set: empty dict, DGGRID default orientation
+    """
     dggs_orient_specify_type = dggs_orient_specify_type or orient_type
+    if dggs_orient_specify_type is not None and dggs_orient_specify_type not in dggs_orient_specify_types:
+        raise ValueError(
+            f"dggs_orient_specify_type must be one of {dggs_orient_specify_types}, got {dggs_orient_specify_type!r}"
+        )
 
-    if dggs_orient_specify_type == 'SPECIFIED' or any(
-        val is not None for val in [dggs_vert0_lon, dggs_vert0_lat, dggs_vert0_azimuth]
-    ):
-        if dggs_vert0_lon is not None:
-            dggs_vert0_lon_val = decimal.Decimal(dggs_vert0_lon)
-            if dggs_vert0_lon_val < -180.0 or dggs_vert0_lon_val > 180.0:
-                raise ValueError('dggs_vert0_lon must be in range [-180,180]')
-        if dggs_vert0_lat is not None:
-            dggs_vert0_lat_val = decimal.Decimal(dggs_vert0_lat)
-            if dggs_vert0_lat_val < -90.0 or dggs_vert0_lat_val > 90.0:
-                raise ValueError('dggs_vert0_lat must be in range [-90,90]')
-        if dggs_vert0_azimuth is not None:
-            dggs_vert0_azimuth_val = decimal.Decimal(dggs_vert0_azimuth)
-            if dggs_vert0_azimuth_val < 0.0 or dggs_vert0_azimuth_val > 360.0:
-                raise ValueError('dggs_vert0_azimuth must be in range [0,360]')
-        return {
-            'dggs_orient_specify_type' : 'SPECIFIED',
-            'dggs_vert0_lon' : dggs_vert0_lon,
-            'dggs_vert0_lat' : dggs_vert0_lat,
-            'dggs_vert0_azimuth' : dggs_vert0_azimuth
-        }
+    vert0 = {
+        'dggs_vert0_lon': (dggs_vert0_lon, -180.0, 180.0),
+        'dggs_vert0_lat': (dggs_vert0_lat, -90.0, 90.0),
+        'dggs_vert0_azimuth': (dggs_vert0_azimuth, 0.0, 360.0),
+    }
+    vert0_set = {name: spec for name, spec in vert0.items() if spec[0] is not None}
+
+    if vert0_set and dggs_orient_specify_type not in (None, 'SPECIFIED'):
+        raise ValueError(
+            f"{', '.join(vert0_set)} can only be used with dggs_orient_specify_type SPECIFIED, "
+            f"not {dggs_orient_specify_type}"
+        )
+
+    if dggs_orient_specify_type == 'SPECIFIED' or vert0_set:
+        conf: DggridMetaConfigT = {'dggs_orient_specify_type': 'SPECIFIED'}
+        for name, (value, lower, upper) in vert0_set.items():
+            _check_degree(name, value, lower, upper)
+            conf[name] = value
+        return conf
+
     if dggs_orient_specify_type == 'RANDOM':
-        return { 'dggs_orient_rand_seed' : dggs_orient_rand_seed }
+        if dggs_orient_rand_seed is None:
+            return {'dggs_orient_specify_type': 'RANDOM'}
+        return {'dggs_orient_specify_type': 'RANDOM', 'dggs_orient_rand_seed': dggs_orient_rand_seed}
 
-    # else default REGION_CENTER
+    if dggs_orient_specify_type == 'REGION_CENTER':
+        conf = {'dggs_orient_specify_type': 'REGION_CENTER'}
+        for name, value, lower, upper in [
+            ('region_center_lon', region_center_lon, -180.0, 180.0),
+            ('region_center_lat', region_center_lat, -90.0, 90.0),
+        ]:
+            if value is not None:
+                _check_degree(name, value, lower, upper)
+                conf[name] = value
+        return conf
+
+    # nothing set, keep DGGRID default orientation
     return {}
 
 
