@@ -31,7 +31,9 @@ _legacy_address_types = {'Z7_STRING': 'DIGIT_STRING', 'Z7': 'INT64'}
 
 def dggrid_get_res(dggrid_instance, dggrid_dggs="ISEA7H", max_res=16):
 
-    isea7h_res = dggrid_instance.grid_stats_table(dggrid_dggs, max_res)
+    # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
+    stats_dggs = "ISEA7H" if dggrid_dggs == "IGEO7" else dggrid_dggs
+    isea7h_res = dggrid_instance.grid_stats_table(stats_dggs, max_res)
     isea7h_res = isea7h_res.rename(
         columns={
             "Resolution": f"{dggrid_dggs}_resolution",
