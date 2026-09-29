@@ -1,6 +1,17 @@
+"""
+IGEO7 convenience wrappers around :class:`dggrid4py.DGGRIDv8`.
+
+All wrappers apply the current IGEO7 best practice:
+
+- DGGRIDv8 only, with the Z7 hierarchical index (``HIERNDX`` / ``Z7``)
+- ``dggs_vert0_lon = 11.20`` (DGGRID's default is 11.25)
+- WGS84 geometries are converted to the authalic sphere before they are passed to DGGRID,
+  and DGGRID output geometries are converted back to WGS84 (geodetic latitude)
+"""
 from pathlib import Path
 import copy
 import math
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -10,6 +21,12 @@ from shapely.geometry import Point, Polygon
 from shapely.ops import transform
 
 from dggrid4py import igeo7
+from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic
+from dggrid4py.dggrid_runner import DGGRIDv8
+
+IGEO7_VERT0_LON = 11.20
+
+_legacy_address_types = {'Z7_STRING': 'DIGIT_STRING', 'Z7': 'INT64'}
 
 
 def dggrid_get_res(dggrid_instance, dggrid_dggs="ISEA7H", max_res=16):
@@ -32,44 +49,175 @@ def dggrid_get_res(dggrid_instance, dggrid_dggs="ISEA7H", max_res=16):
     return isea7h_res
 
 
-def dggrid_igeo7_grid_cell_centroids_from_cellids(series, dggrid_instance, address_type='Z7_STRING'):
-    resolution = igeo7.get_z7string_resolution(series[0])
-    
-    gdf = dggrid_instance.grid_cell_centroids_from_cellids(series,
-                                                dggs_type='IGEO7',
-                                                resolution=resolution,
-                                                input_address_type=address_type,
-                                                output_address_type=address_type)
-    gdf.crs = 4326
+def igeo7_meta_config(hier_ndx_form='DIGIT_STRING', **overrides):
+    """
+    DGGRIDv8 meta configuration for IGEO7 with the Z7 index.
+
+    Args:
+        hier_ndx_form (str): ``DIGIT_STRING`` (e.g. ``'003456231'``) or ``INT64``
+            (DGGRID writes this as the 16 character Z7 hex string, e.g. ``'0042097fffffffff'``)
+        **overrides: any other DGGRID parameters, e.g. ``dggs_vert0_lon`` to change the default 11.20
+
+    Returns:
+        dict: keyword arguments for the DGGRIDv8 functions
+    """
+    hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    meta = {
+        "input_address_type": "HIERNDX",
+        "input_hier_ndx_system": "Z7",
+        "input_hier_ndx_form": hier_ndx_form,
+        "output_address_type": "HIERNDX",
+        "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+        "output_hier_ndx_system": "Z7",
+        "output_hier_ndx_form": hier_ndx_form,
+        "dggs_vert0_lon": IGEO7_VERT0_LON,
+    }
+    meta.update(overrides)
+    return meta
+
+
+def _normalise_hier_ndx_form(hier_ndx_form):
+    if hier_ndx_form in _legacy_address_types:
+        new_form = _legacy_address_types[hier_ndx_form]
+        warnings.warn(
+            f"address_type '{hier_ndx_form}' is the DGGRIDv7 form, use hier_ndx_form='{new_form}' with DGGRIDv8",
+            DeprecationWarning,
+            stacklevel=3,
+        )
+        return new_form
+    if hier_ndx_form not in ('DIGIT_STRING', 'INT64'):
+        raise ValueError(f"hier_ndx_form must be 'DIGIT_STRING' or 'INT64', got {hier_ndx_form!r}")
+    return hier_ndx_form
+
+
+def _require_dggrid_v8(dggrid_instance):
+    if not isinstance(dggrid_instance, DGGRIDv8):
+        raise TypeError(
+            "IGEO7 wrappers require a DGGRIDv8 instance (DGGRID >= 8.41 with the Z7 hierarchical index), "
+            f"got {type(dggrid_instance).__name__}"
+        )
+
+
+def _cell_id_list(cell_ids):
+    # positional access that works for lists, numpy arrays and pandas Series with any index
+    cell_id_list = [str(c) for c in np.asarray(cell_ids).tolist()]
+    if len(cell_id_list) == 0:
+        raise ValueError("no cell ids given")
+    return cell_id_list
+
+
+def z7_resolution(cell_id, hier_ndx_form='DIGIT_STRING'):
+    """
+    Resolution of a Z7 cell id in ``DIGIT_STRING`` or ``INT64`` (hex string) form.
+    """
+    if hier_ndx_form == 'INT64':
+        return igeo7.get_z7hex_resolution(str(cell_id))
+    return igeo7.get_z7string_resolution(str(cell_id))
+
+
+def _from_cellids(func_name, cell_ids, dggrid_instance, hier_ndx_form, to_geodetic, meta_overrides):
+    _require_dggrid_v8(dggrid_instance)
+    hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    cell_id_list = _cell_id_list(cell_ids)
+    resolution = z7_resolution(cell_id_list[0], hier_ndx_form)
+    gdf = getattr(dggrid_instance, func_name)(
+        cell_id_list,
+        dggs_type='IGEO7',
+        resolution=resolution,
+        **igeo7_meta_config(hier_ndx_form, **meta_overrides),
+    )
+    if to_geodetic:
+        gdf['geometry'] = geoseries_to_geodetic(gdf.geometry)
+    gdf = gdf.set_crs(4326, allow_override=True)
     return gdf
 
 
-def dggrid_igeo7_grid_cell_polygons_from_cellids(series, dggrid_instance, address_type='Z7_STRING'):
-    resolution = igeo7.get_z7string_resolution(series[0])
-    
-    gdf = dggrid_instance.grid_cell_polygons_from_cellids(series,
-                                                dggs_type='IGEO7',
-                                                resolution=resolution,
-                                                input_address_type=address_type,
-                                                output_address_type=address_type)
-    gdf.crs = 4326
+def dggrid_igeo7_grid_cell_centroids_from_cellids(series, dggrid_instance, hier_ndx_form='DIGIT_STRING', to_geodetic=True, **meta_overrides):
+    """
+    Cell centroids for a list of IGEO7 Z7 cell ids (all of the same resolution).
+
+    Returns a GeoDataFrame in WGS84 (geodetic latitude), unless ``to_geodetic=False``
+    (then the coordinates stay on DGGRID's authalic sphere).
+    """
+    return _from_cellids('grid_cell_centroids_from_cellids', series, dggrid_instance, hier_ndx_form, to_geodetic, meta_overrides)
+
+
+def dggrid_igeo7_grid_cell_polygons_from_cellids(series, dggrid_instance, hier_ndx_form='DIGIT_STRING', to_geodetic=True, **meta_overrides):
+    """
+    Cell polygons for a list of IGEO7 Z7 cell ids (all of the same resolution).
+
+    Returns a GeoDataFrame in WGS84 (geodetic latitude), unless ``to_geodetic=False``
+    (then the coordinates stay on DGGRID's authalic sphere).
+    """
+    return _from_cellids('grid_cell_polygons_from_cellids', series, dggrid_instance, hier_ndx_form, to_geodetic, meta_overrides)
+
+
+def dggrid_igeo7_grid_cell_polygons_for_extent(clip_geom, resolution, dggrid_instance, hier_ndx_form='DIGIT_STRING', to_geodetic=True, **meta_overrides):
+    """
+    IGEO7 cell polygons at ``resolution`` covering ``clip_geom`` (a shapely geometry in WGS84).
+
+    The clip geometry is converted to the authalic sphere before it is passed to DGGRID, and the
+    resulting cell polygons are converted back to WGS84 (unless ``to_geodetic=False``).
+    """
+    _require_dggrid_v8(dggrid_instance)
+    hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    clip_authalic = geoseries_to_authalic(gpd.GeoSeries([clip_geom])).iloc[0]
+    gdf = dggrid_instance.grid_cell_polygons_for_extent(
+        'IGEO7',
+        resolution,
+        clip_geom=clip_authalic,
+        **igeo7_meta_config(hier_ndx_form, **meta_overrides),
+    )
+    if to_geodetic:
+        gdf['geometry'] = geoseries_to_geodetic(gdf.geometry)
+    gdf = gdf.set_crs(4326, allow_override=True)
     return gdf
 
 
+def dggrid_igeo7_cells_for_geo_points(geodf_points_wgs84, resolution, dggrid_instance, hier_ndx_form='DIGIT_STRING', column='name', **meta_overrides):
+    """
+    Assign IGEO7 Z7 cell ids at ``resolution`` to WGS84 points.
 
-def dggrid_igeo7_q2di_from_cellids(series, dggrid_instance, address_type='Z7_STRING'):
-    resolution = igeo7.get_z7string_resolution(series[0])
-    
-    q2di_df = dggrid_instance.address_transform(series,
+    The point latitudes are converted to the authalic sphere before they are passed to DGGRID.
+    Returns a copy of ``geodf_points_wgs84`` (geometry unchanged, in WGS84) with the cell ids in ``column``.
+    Use :func:`dggrid_igeo7_grid_cell_polygons_from_cellids` to get the cell polygons for these ids.
+    """
+    _require_dggrid_v8(dggrid_instance)
+    hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    meta = igeo7_meta_config(hier_ndx_form, **meta_overrides)
+    points_authalic = gpd.GeoDataFrame(geometry=geoseries_to_authalic(geodf_points_wgs84.geometry.reset_index(drop=True)), crs=4326)
+    cells = dggrid_instance.cells_for_geo_points(
+        points_authalic,
+        True,
+        'IGEO7',
+        resolution,
+        **meta,
+    )
+    result = geodf_points_wgs84.copy()
+    result[column] = cells['name'].astype(str).values
+    return result
+
+
+def dggrid_igeo7_q2di_from_cellids(series, dggrid_instance, hier_ndx_form='DIGIT_STRING', **meta_overrides):
+    """
+    Q2DI (quad, i, j) addresses for a list of IGEO7 Z7 cell ids (all of the same resolution).
+    """
+    _require_dggrid_v8(dggrid_instance)
+    hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    cell_id_list = _cell_id_list(series)
+    resolution = z7_resolution(cell_id_list[0], hier_ndx_form)
+    meta = {k: v for k, v in igeo7_meta_config(hier_ndx_form, **meta_overrides).items() if not k.startswith('output_')}
+
+    q2di_df = dggrid_instance.address_transform(cell_id_list,
                                                 'IGEO7',
                                                 resolution,
-                                                input_address_type=address_type,
-                                                output_address_type='Q2DI')
-    
+                                                output_address_type='Q2DI',
+                                                **meta)
+
     q2di_df[["Q", "I", "J"]] = q2di_df['Q2DI'].apply(lambda s: pd.Series( s.split(" ") ))
     for c in ["Q", "I", "J"]:
         q2di_df[c] = q2di_df[c].astype(np.int64)
-        
+
     return q2di_df
 
 
@@ -100,31 +248,36 @@ def z7_is_pentagon(z7_str):
 
 
 
-def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True):
+def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **meta_overrides):
+    """
+    Z7 ids (DIGIT_STRING form) of the direct neighbours of ``z7_str``.
 
+    ``cls_m`` is the characteristic length scale of the resolution in metres (see :func:`dggrid_get_res`).
+    All geometry work happens on DGGRID's authalic sphere, so no WGS84 conversion is needed here.
+    """
     import pyproj
 
+    _require_dggrid_v8(dggrid_instance)
+    z7_str = str(z7_str)
     resolution = igeo7.get_z7string_resolution(z7_str)
     parent, local_pos, is_center = igeo7.get_z7string_local_pos(z7_str)
 
     if is_center:
-        # print("should be straightforward return")
+        # centre child: the neighbours are its siblings
         if z7_is_pentagon(z7_str):
             return np.array([parent + str(n) for n in [1, 3,4,5,6]])
         else:
             return np.array([parent + str(n) for n in [1, 2, 3,4,5,6]])
-        
-    the_one = dggrid_instance.grid_cell_centroids_from_cellids([z7_str],
-                                                dggs_type='IGEO7',
-                                                resolution=resolution,
-                                                input_address_type='Z7_STRING',
-                                                output_address_type='Z7_STRING').iloc[0]['geometry']
 
-    if not (-180 <= the_one.x <= 180) and not (-90 <= the_one.y <= 90):
-        raise ValueError(f"Not a valid WGS84 geom: {str(the_one.wkt)}")
-        
+    the_one = dggrid_igeo7_grid_cell_centroids_from_cellids(
+        [z7_str], dggrid_instance, to_geodetic=False, **meta_overrides
+    ).iloc[0]['geometry']
+
+    if not (-180 <= the_one.x <= 180) or not (-90 <= the_one.y <= 90):
+        raise ValueError(f"Not a valid lon/lat geom: {str(the_one.wkt)}")
+
     local_proj_str = f"+proj=laea +lat_0={the_one.y} +lon_0={the_one.x}"
-    local_projection = pyproj.Transformer.from_crs('EPSG:4236', local_proj_str, always_xy=True).transform
+    local_projection = pyproj.Transformer.from_crs('EPSG:4326', local_proj_str, always_xy=True).transform
     lamb_geom = transform(local_projection, the_one)
 
     neighbour_field_local = lamb_geom.buffer(cls_m)
@@ -132,28 +285,24 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True):
     if stricter_clip:
         neighbour_field_local_clip = neighbour_field_local.buffer(cls_m / 6)
 
-    inverse = pyproj.Transformer.from_crs(local_proj_str, 'EPSG:4236', always_xy=True).transform
+    inverse = pyproj.Transformer.from_crs(local_proj_str, 'EPSG:4326', always_xy=True).transform
     neighbour_field = transform(inverse, neighbour_field_local)
     if stricter_clip:
         neighbour_field_clip = transform(inverse, neighbour_field_local_clip)
-    
+
+    # neighbour_field is already on the authalic sphere, pass it to DGGRID as is
     k_ring_group = dggrid_instance.grid_cell_centroids_for_extent('IGEO7',
                                                                   resolution,
                                                                   clip_geom=neighbour_field,
-                                                                  output_address_type='Z7_STRING')
-    k_ring_group.crs = 4326
-    # we couldtechnically already drop the geometry? But maybe need for the orientations
+                                                                  **igeo7_meta_config('DIGIT_STRING', **meta_overrides))
+    k_ring_group = k_ring_group.set_crs(4326, allow_override=True)
+    k_ring_group['name'] = k_ring_group['name'].astype(str)
     if stricter_clip:
         k_ring_group = k_ring_group[k_ring_group.within(neighbour_field_clip)]
 
-    # we should drop the centre, right?!
-    has_in = k_ring_group.loc[k_ring_group['name'] == z7_str]
-    if len(has_in.index) > 0:
-        k_ring_group = k_ring_group.drop(has_in.index[0])
-    # ideally we order/index them according Z7 local_pos?
-    
-    # k_ring_group['local_pos'] = k_ring_group['name'].apply(lambda cellid: cellid[-1:])
-    return k_ring_group['name'].values
+    # drop the centre cell itself
+    k_ring_group = k_ring_group[k_ring_group['name'] != z7_str]
+    return np.array(k_ring_group['name'].tolist())
 
 
 def suggest_window_blocks_per_chunk(rs_src, mem_use_mb):

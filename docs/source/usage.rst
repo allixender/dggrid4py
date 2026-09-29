@@ -252,7 +252,8 @@ e.g. the conda-forge package installed via pixi above). Keep the common settings
        "dggs_vert0_lon": 11.20,
    }
 
-The full worked example and the background on sphere vs ellipsoid are in :doc:`IGEO7`.
+The full worked example and the background on sphere vs ellipsoid are in :doc:`IGEO7`. The wrappers in
+:mod:`dggrid4py.igeo7_ext` apply this configuration and the authalic conversion for you.
 
 TODO
 ----
