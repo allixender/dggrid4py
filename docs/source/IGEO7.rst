@@ -23,7 +23,7 @@ In order to have DGGH and ZIRS compliant with the OGC DGGS standard,
 we aim to enable a few minor adjustments to IGEO7 through the use of dggrid4py:
 
 - to apply authalic conversion to the WGS84 ellipsoid instead of the spherical approximation, using `pygeodesy` (based off geographiclib), see :mod:`dggrid4py.auxlat`
-- a rotation of the base icosahedron of 0.05 degrees to align the vertices better with water bodies through a specific parameter in DGGRID. Example: TODO
+- a rotation of the base icosahedron of 0.05 degrees to align the vertices better with water bodies through a specific parameter in DGGRID: ``dggs_vert0_lon = 11.20`` instead of the DGGRID default of ``11.25``, see the ``meta_config`` in the example below
 
 In practice this means that IGEO7 as described in the original publication is not the same as the ellipsoid-adjusted IGEO7 version, though both can be generated through dggrid4py.
 
@@ -32,19 +32,21 @@ be two slightly different IGEO7 implementations in use and implementers shall be
 
 Example of how to generate cells in IGEO7 DGGRS with the Z7 indexing system using dggrid4py
 -------------------------------------------------------------------------------------------
-In this example, we demonstrate how to use ``dggrid4py`` to generate cells in **IGEO7** DGGRS with the **Z7** indexing system for an input extent in WGS84. The ``DGGRID`` version we use in this example is ``8.43``. 
+In this example, we demonstrate how to use ``dggrid4py`` to generate cells in **IGEO7** DGGRS with the **Z7** indexing system for an input extent in WGS84. The ``DGGRID`` version we use in this example is ``8.43``; any newer version works too, e.g. ``8.44`` from conda-forge, which you get with the pixi quickstart in :ref:`installation`.
 
-First, we instantiate a DGGRIDv8 object from dggrid4py. 
+First, we instantiate a DGGRIDv8 object from dggrid4py.
 
 .. code:: python
-    
+
     from dggrid4py import DGGRIDv8
     from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic
+    import shutil
     import tempfile
     import shapely
     from geopandas import GeoSeries
 
-    dggrid_instance = DGGRIDv8("path to DGGRID executable", working_dir=tempfile.mkdtemp())
+    # inside a pixi/conda environment, dggrid is on the PATH; otherwise pass the path to the DGGRID executable
+    dggrid_instance = DGGRIDv8(shutil.which("dggrid"), working_dir=tempfile.mkdtemp())
 
 Then we create a ``meta_config`` dictionary for use by DGGRIDv8's functions. This ``meta_config`` specifies parameters used by ``DGGRID``, such as which indexing system to use and the position of the initial vertex, etc. Users can override the dggrid4py default settings or introduce additional parameters to DGGRID using this dictionary.
 
@@ -60,9 +62,11 @@ Then we create a ``meta_config`` dictionary for use by DGGRIDv8's functions. Thi
         "output_cell_label_type": 'OUTPUT_ADDRESS_TYPE',
         "output_hier_ndx_system": 'Z7',
         "output_hier_ndx_form": 'DIGIT_STRING',
-        # initial vertex longitude
+        # initial vertex longitude, 0.05 degrees off the DGGRID default of 11.25
         "dggs_vert0_lon": 11.20
     }
+
+``input_hier_ndx_form`` and ``output_hier_ndx_form`` accept either ``DIGIT_STRING`` (Z7 textual form, e.g. ``'003456231'``) or ``INT64`` (Z7 integer form).
 
 Then we can use the ``grid_cell_polygons_for_extent`` function to generate **IGEO7** cells using the **Z7** indexing system for an extent. However, as mentioned above, ``DGGRID`` (as of current version 8.43) uses an authalic sphere as the Earth's reference model, so passing geopoints or extents in WGS84 using an ellipsoid as the reference model causes discrepancies. Therefore, we need to convert the input coordinates from WGS84 to authalic for input to the functions, and converting the output back from authalic to WGS84. Users can perform the conversion using  ``geoseries_to_authalic`` and ``geoseries_to_geodetic`` from ``dggrid4py.auxlat``.
 
