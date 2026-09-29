@@ -166,6 +166,8 @@ DggsOutputCellLabelTypeV8T = Literal[
 ]
 output_cell_label_type_v8 = get_args(DggsOutputCellLabelTypeV8T)
 
+shapefile_id_field_lengths = range(1, 51)
+
 output_extra_fields_v7 = {
     'output_cell_label_type': output_cell_label_type_v7
 }
@@ -180,6 +182,7 @@ output_extra_fields_v8 = {
     'output_cell_label_type': output_cell_label_type_v8,
     'output_hier_ndx_system': output_hier_ndx_systems,
     'output_hier_ndx_form': output_hier_ndx_forms,
+    'shapefile_id_field_length': shapefile_id_field_lengths,
 }
 
 DggsOutputAddressTypeT = DggsOutputAddressTypeV7T | DggsOutputAddressTypeV8T
@@ -872,6 +875,8 @@ class DGGRID(abc.ABC):
                 output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT']
                 and output_conf['cell_output_file_name'] is not None
             ):
+                if self.version == 8 and output_conf['cell_output_type'] == 'SHAPEFILE':
+                    output_conf.setdefault('shapefile_id_field_length', 50)
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
             elif (
@@ -885,6 +890,8 @@ class DGGRID(abc.ABC):
                 metafile.append("cell_output_type NONE")
 
             # check join cell grid params add to metafile
+            for elem in filter(lambda x: x.startswith('shapefile_'), output_conf.keys()):
+                metafile.append(f"{elem} " + str(output_conf[elem]))
 
         # collection output
         if 'collection_output_file_name' in output_conf:

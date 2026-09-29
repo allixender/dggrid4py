@@ -379,6 +379,62 @@ def test_grid_cell_polygons_from_cellids(monkeypatch):
     }
 
 
+def test_grid_cell_polygons_from_cellids_sets_shapefile_id_field_length(monkeypatch):
+    metafile = []
+    portable_dggrid = DGGRIDv8(
+        executable=dggrid_path,
+        has_gdal=False,
+        tmp_geo_out_legacy=True,
+    )
+
+    def mock_dggrid_grid_gen_run(__metafile):
+        metafile[:] = __metafile
+        return -1  # cause grid_gen to early-exit in error
+
+    monkeypatch.setattr(portable_dggrid, "run", mock_dggrid_grid_gen_run)
+
+    with pytest.raises(ValueError):  # catch and ignore (early-abort "run error")
+        portable_dggrid.grid_cell_polygons_from_cellids(
+            dggs_type="IGEO7",
+            resolution=18,
+            cell_id_list=["023255620345"],
+            clip_subset_type="COARSE_CELLS",
+            clip_cell_res=10,
+            input_address_type="HIERNDX",
+            output_address_type="HIERNDX",
+        )
+
+    meta_args = dict([line.split(" ", 1) for line in metafile])
+    assert "dggrid" in meta_args["clip_region_files"]
+    assert "dggrid" in meta_args["cell_output_file_name"]
+    meta_args.pop("clip_region_files")
+    meta_args.pop("cell_output_file_name")
+    metafile_patched = [f"{key} {val}" for key, val in meta_args.items()]
+
+    assert set(metafile_patched) == {
+        "dggrid_operation GENERATE_GRID",
+        "dggs_type IGEO7",
+        "dggs_proj ISEA",
+        "dggs_aperture 7",
+        "dggs_topology HEXAGON",
+        "dggs_res_spec 18",
+        "precision 7",
+        "cell_output_type SHAPEFILE",
+        "clip_cell_addresses 023255620345",
+        "clip_subset_type COARSE_CELLS",
+        "clip_cell_res 10",
+        "clipper_scale_factor 100000000",
+        "dggs_orient_specify_type SPECIFIED",
+        "dggs_vert0_azimuth 0.0",
+        "dggs_vert0_lat 58.28252559",
+        "dggs_vert0_lon 11.25",
+        "input_address_type HIERNDX",
+        "output_address_type HIERNDX",
+        "shapefile_id_field_length 50",
+        "point_output_type NONE",
+    }
+
+
 def test_cells_for_geo_points(monkeypatch):
     dgapi_grid_transform = dggrid.dgapi_grid_transform
     dgapi_grid_gen = dggrid.dgapi_grid_gen
