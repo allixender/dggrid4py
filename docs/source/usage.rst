@@ -6,6 +6,60 @@ Usage
 Installation
 ------------
 
+Quickstart with pixi (recommended)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The easiest way to get started is a `pixi <https://pixi.sh>`_ environment. It installs
+DGGRID (with GDAL support) and the geospatial Python stack from conda-forge, and
+dggrid4py from PyPI, so you don't need to compile anything.
+
+.. code-block:: console
+
+   $ pixi init my-dggs-project -c conda-forge
+   $ cd my-dggs-project
+   $ pixi add python=3.12 dggrid geopandas pyogrio
+   $ pixi add --pypi dggrid4py
+
+``dggrid4py`` pulls in ``pygeodesy`` from PyPI (it is not available on conda-forge).
+Check that the ``dggrid`` executable is available in the environment:
+
+.. code-block:: console
+
+   $ pixi run which dggrid
+   $ pixi run dggrid        # prints "usage: dggrid metaFileName"
+
+Inside the pixi environment, DGGRID lives on the ``PATH``, so you can point dggrid4py at it with ``shutil.which``:
+
+.. code:: python
+
+   import shutil
+   import tempfile
+   from dggrid4py import DGGRIDv8
+
+   dggrid_instance = DGGRIDv8(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+
+Run your scripts with ``pixi run python my_script.py`` or open a shell in the environment with ``pixi shell``.
+
+For IGEO7 with the Z7 index, continue with :ref:`igeo7_usage`.
+
+Developing dggrid4py with pixi
+""""""""""""""""""""""""""""""
+
+To run the dggrid4py test suite against the conda-forge DGGRID, create a pixi environment
+outside the repository and point ``DGGRID_PATH`` at its ``dggrid``:
+
+.. code-block:: console
+
+   $ pixi init dggrid4py-dev -c conda-forge && cd dggrid4py-dev
+   $ pixi add python=3.12 dggrid pytest geopandas shapely pandas numpy pyogrio pip
+   $ pixi run python -m pip install pygeodesy
+   $ cd <path_to>/dggrid4py
+   $ DGGRID_PATH=<path_to>/dggrid4py-dev/.pixi/envs/default/bin/dggrid \
+       PYTHONPATH=. <path_to>/dggrid4py-dev/.pixi/envs/default/bin/python -m pytest tests
+
+Installation with pip
+^^^^^^^^^^^^^^^^^^^^^
+
 To use dggrid4py, first install it using pip:
 
 .. code-block:: console
@@ -27,11 +81,18 @@ Or compile from source: https://github.com/sahrk/DGGRID
 Portable DGGRID binary
 ----------------------
 
+.. warning::
+
+   The precompiled portable DGGRID binaries are still **experimental**. They are built
+   without GDAL support, may lag behind the current DGGRID release, and are not available
+   for every platform. For a reliable setup, use the pixi or conda-forge installation
+   described above.
+
 If you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
 
 .. code:: python
 
-   from dggrid4py import tool
+   from dggrid4py import DGGRIDv7, tool
 
    dggrid_exec = tool.get_portable_executable(".")
    dggrid_instance_portable = DGGRIDv7(executable=dggrid_exec, working_dir='.', capture_logs=False, silent=True, has_gdal=False, tmp_geo_out_legacy=True, debug=False)
@@ -132,9 +193,10 @@ comfortable geopython libraries, like shapely and geopandas
 
    # single latittude use geographic to authalic conversion (optional, passing data from ellipsoid to the sphere)
    # use for better accuracy on ellipsoid and with IGEO7
+   from dggrid4py import DGGRIDv8
    from dggrid4py.auxlat import geodetic_to_authalic, authalic_to_geodetic
 
-   clip_bound_auth = clip_bound = shapely.geometry.box(25.2, auxlat.geodetic_to_authalic(58.1), 27.3, auxlat.geodetic_to_authalic(59.2))
+   clip_bound_auth = shapely.geometry.box(25.2, geodetic_to_authalic(58.1), 27.3, geodetic_to_authalic(59.2))
 
    dggrid_instance_v8 = DGGRIDv8(executable='<path_to>/dggrid', working_dir='.', capture_logs=False, silent=False, tmp_geo_out_legacy=False, debug=False)
 
@@ -161,10 +223,36 @@ comfortable geopython libraries, like shapely and geopandas
 
    
 
+.. _igeo7_usage:
+
 IGEO7 Usage
 -----------
 
-Link to IGEO7 description: :doc:`IGEO7`
+Current best practice for IGEO7 with the Z7 index is the ``DGGRIDv8`` class (DGGRID 8.43 or newer,
+e.g. the conda-forge package installed via pixi above). Keep the common settings in a
+``meta_config`` dictionary and pass it to the dggrid4py functions:
+
+- ``input_hier_ndx_form`` / ``output_hier_ndx_form``: ``DIGIT_STRING`` (Z7 textual form, e.g. ``'003456231'``) or ``INT64`` (Z7 integer form)
+- ``dggs_vert0_lon``: set to ``11.20`` for the ellipsoid-adjusted IGEO7 (DGGRID's default is ``11.25``)
+- convert WGS84 input to the authalic sphere with ``geoseries_to_authalic`` and the output back with ``geoseries_to_geodetic`` from :mod:`dggrid4py.auxlat`
+
+.. code:: python
+
+   meta_config = {
+       # input cell ids representation
+       "input_address_type": "HIERNDX",
+       "input_hier_ndx_system": "Z7",
+       "input_hier_ndx_form": "DIGIT_STRING",
+       # output cell ids representation
+       "output_address_type": "HIERNDX",
+       "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+       "output_hier_ndx_system": "Z7",
+       "output_hier_ndx_form": "DIGIT_STRING",
+       # initial vertex longitude
+       "dggs_vert0_lon": 11.20,
+   }
+
+The full worked example and the background on sphere vs ellipsoid are in :doc:`IGEO7`.
 
 TODO
 ----

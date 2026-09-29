@@ -13,6 +13,29 @@ GNU AFFERO GENERAL PUBLIC LICENSE
 
 You need the `dggrid` tool compiled available on the system.
 
+### Quickstart with pixi (recommended)
+
+The easiest way to get started is a [pixi](https://pixi.sh) environment. DGGRID (with GDAL) and the geospatial stack come from conda-forge, dggrid4py (and `pygeodesy`) from PyPI:
+
+```bash
+pixi init my-dggs-project -c conda-forge
+cd my-dggs-project
+pixi add python=3.12 dggrid geopandas pyogrio
+pixi add --pypi dggrid4py
+pixi run dggrid   # prints "usage: dggrid metaFileName"
+```
+
+Inside the environment, `dggrid` is on the `PATH`:
+
+```python
+import shutil, tempfile
+from dggrid4py import DGGRIDv8
+
+dggrid_instance = DGGRIDv8(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+```
+
+For IGEO7/Z7, use `DGGRIDv8` with `dggs_vert0_lon=11.20` and the authalic conversion, see the [IGEO7 docs](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html).
+
 Besides some low-level access influence the dggrid operations' metafile creation, a few high-level functions are integrated to work with the more comfortable geopython libraries, like shapely and geopandas
 
 - grid_cell_polygons_for_extent(): fill extent/subset with cells at resolution (clip or world)
@@ -92,6 +115,8 @@ print(df_tri.head(3))
 
 ### Portable DGGRID binary
 
+> **Warning:** the precompiled portable DGGRID binaries are still **experimental**. They are built without GDAL support, may lag behind the current DGGRID release, and are not available for every platform. For a reliable setup, use the pixi or conda-forge installation above.
+
 if you don't have a special local distribution of the dggrid-tool or if you didn't install with conda-forge, you can use a provided portable:
 
 ```python
@@ -120,7 +145,7 @@ After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rat
 ## Bundling for different operating systems
 
 Having to compile DGGRID for Windows can be a bit challenging. We are
-working on an updated conda package. Currently DGGRID v8.3 is available on conda-forge:
+working on an updated conda package. DGGRID (currently v8.44) is available on conda-forge, which is what the pixi quickstart above uses:
 
 [![Latest version on conda-forge](https://anaconda.org/conda-forge/dggrid/badges/version.svg)](https://anaconda.org/conda-forge/dggrid)
 
