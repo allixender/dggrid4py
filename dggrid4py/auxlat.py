@@ -1,5 +1,7 @@
+import numpy as np
 from pygeodesy.ellipsoids import Ellipsoids
 from shapely.geometry import Point, Polygon
+from shapely.ops import transform
 
 wgs84 = Ellipsoids.WGS84
 
@@ -24,14 +26,29 @@ def _apply_to_shapely_points(points, func):
     return [ Point(point.x, func(point.y)) for point in points]
 
 
+def _apply_to_geometry(geom, func):
+    # any shapely geometry (points, lines, polygons with holes, multi-geometries, collections),
+    # coordinates in lon/lat, only the latitude is converted
+    if geom is None or geom.is_empty:
+        return geom
+    vfunc = np.vectorize(lambda lat: float(func(lat)), otypes=[float])
+
+    def _lat(x, y, z=None):
+        y = vfunc(y) if np.ndim(y) else float(func(y))
+        return (x, y) if z is None else (x, y, z)
+
+    return transform(_lat, geom)
+
+
 def geoseries_to_authalic(geoseries):
-    # geoseries is a geopandas GeoSeries of shapely geometries
-    return geoseries.apply(lambda geom: geom if geom.is_empty else
-                          (_apply_to_shapely_point(geom, geodetic_to_authalic) if isinstance(geom, Point) else
-                           _apply_to_simple_shapely_polygon(geom, geodetic_to_authalic)))
+    """
+    Convert the latitudes of a GeoSeries in WGS84 (geodetic) to the authalic sphere used by DGGRID.
+    """
+    return geoseries.apply(lambda geom: _apply_to_geometry(geom, geodetic_to_authalic))
+
 
 def geoseries_to_geodetic(geoseries):
-    # geoseries is a geopandas GeoSeries of shapely geometries
-    return geoseries.apply(lambda geom: geom if geom.is_empty else
-                          (_apply_to_shapely_point(geom, authalic_to_geodetic) if isinstance(geom, Point) else
-                           _apply_to_simple_shapely_polygon(geom, authalic_to_geodetic)))
+    """
+    Convert the latitudes of a GeoSeries on the authalic sphere (DGGRID output) back to WGS84 (geodetic).
+    """
+    return geoseries.apply(lambda geom: _apply_to_geometry(geom, authalic_to_geodetic))

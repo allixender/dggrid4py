@@ -86,6 +86,53 @@ Then we can use the ``grid_cell_polygons_for_extent`` function to generate **IGE
     igeo7_cells_df['geometry'] = geoseries_to_geodetic(igeo7_cells_df['geometry'])
 
 
+Convenience wrappers in ``dggrid4py.igeo7_ext``
+-----------------------------------------------
+
+The wrappers in :mod:`dggrid4py.igeo7_ext` apply all of the above for you:
+
+- they only accept a ``DGGRIDv8`` instance (a ``DGGRIDv7`` instance raises ``TypeError``)
+- they use the Z7 hierarchical index and ``dggs_vert0_lon = 11.20``, see ``igeo7_meta_config()``
+- WGS84 inputs (clip geometries, points) are converted to the authalic sphere before they go to DGGRID,
+  and output geometries are converted back to WGS84
+
+.. code:: python
+
+    import shutil
+    import tempfile
+    import shapely
+    import geopandas as gpd
+    from dggrid4py import DGGRIDv8, igeo7_ext
+
+    dggrid_instance = DGGRIDv8(shutil.which("dggrid"), working_dir=tempfile.mkdtemp())
+
+    # Tartu bbox in wgs84
+    extent = shapely.box(26.664593, 58.348705, 26.785607, 58.422495)
+
+    # cell polygons for an extent, in and out in wgs84
+    cells = igeo7_ext.dggrid_igeo7_grid_cell_polygons_for_extent(extent, 9, dggrid_instance)
+
+    # centroids and polygons for a list of Z7 cell ids (all of the same resolution)
+    centroids = igeo7_ext.dggrid_igeo7_grid_cell_centroids_from_cellids(cells["name"], dggrid_instance)
+    polygons = igeo7_ext.dggrid_igeo7_grid_cell_polygons_from_cellids(cells["name"], dggrid_instance)
+
+    # Z7 cell ids for wgs84 points, returns a copy of the points with a 'name' column
+    points = gpd.GeoDataFrame(geometry=[shapely.Point(26.72, 58.38)], crs=4326)
+    points = igeo7_ext.dggrid_igeo7_cells_for_geo_points(points, 9, dggrid_instance)
+
+    # Q2DI addresses and direct neighbours
+    q2di = igeo7_ext.dggrid_igeo7_q2di_from_cellids(cells["name"], dggrid_instance)
+    cls_m = igeo7_ext.dggrid_get_res(dggrid_instance, "IGEO7", 9).loc[9, "cls_m"]
+    neighbours = igeo7_ext.z7_k1_ring_neighbours(cells["name"].iloc[0], dggrid_instance, cls_m)
+
+``hier_ndx_form='INT64'`` switches all wrappers to the 64 bit Z7 form (DGGRID writes it as a 16 character hex string,
+e.g. ``'0042529bffffffff'``, which :mod:`dggrid4py.igeo7` can decode). The former ``address_type='Z7_STRING'``
+argument still works, with a ``DeprecationWarning``, and maps to ``DIGIT_STRING``.
+
+Skipping the authalic conversion matters: in our tests, the WGS84 centroids of resolution 9 cells in Tartu
+(around 58.4°N) fell into a different cell for every single point when passed to DGGRID without conversion.
+
+
 API Reference
 -------------
 
