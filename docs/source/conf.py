@@ -4,6 +4,10 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../"))
+# the repository root, so that the API pages document the checkout and not an installed release
+sys.path.insert(0, os.path.abspath("../../"))
+
+import dggrid4py
 
 # -- Project information
 
@@ -11,8 +15,8 @@ project = 'dggrid4py'
 copyright = '2025, Alexander Kmoch'
 author = "Alexander Kmoch, Wai Tik Chan"
 
-release = '0.5.3'
-version = '0.5.3'
+release = dggrid4py.__version__
+version = dggrid4py.__version__
 
 # -- General configuration
 
@@ -21,6 +25,7 @@ extensions = [
     'sphinx.ext.doctest',
     'sphinx.ext.autodoc',
     'sphinx.ext.autosummary',
+    'sphinx.ext.napoleon',
     'sphinx.ext.intersphinx',
     'myst_parser'
 ]

@@ -11,7 +11,7 @@
 from pathlib import Path
 import pandas as pd
 
-from dggrid4py import DGGRIDv7, dgselect, dggs_types
+from dggrid4py import DGGRIDv8, dgselect, dggs_types
 
 
 def example_generate(dggrid_instance):
@@ -247,7 +247,7 @@ if __name__ == '__main__':
     example_src = Path('./examples')
 
     # with a /tmp dir, e.g. on Linux/Mac
-    dggrid = DGGRIDv7(executable='/usr/local/bin/dggrid', working_dir='/tmp', capture_logs=True, silent=False)
+    dggrid = DGGRIDv8(executable='/usr/local/bin/dggrid', working_dir='/tmp', capture_logs=True, silent=False)
 
     print( dggrid.is_runnable() == True )
 

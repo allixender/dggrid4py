@@ -1779,7 +1779,8 @@ class DGGRID(abc.ABC):
         generates a DGGS grid and returns all the cellids as a pandas dataframe
             a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
-            TODO could cellids be generated for COARSE_CELLS? Generate child id from list of parent ids?
+
+        TODO could cellids be generated for COARSE_CELLS? Generate child id from list of parent ids?
         """
         self.resolve_address_type('input', None, conf_extra)
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)

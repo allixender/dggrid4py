@@ -4,7 +4,7 @@
 Abstract class for DGGRID versions
 
 
-.. currentmodule:: dggrid4py
+.. currentmodule:: dggrid4py.dggrid_runner
 
 .. autoclass:: DGGRID
 

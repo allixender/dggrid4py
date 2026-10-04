@@ -12,7 +12,8 @@ import geopandas as gpd
 import shapely
 
 import dggrid4py
-from dggrid4py import DGGRIDv7, dggs_types, igeo7
+from dggrid4py import DGGRIDv8, dggs_types, igeo7, igeo7_ext
+from dggrid4py.auxlat import geoseries_to_geodetic
 
 
 def highlevel_grid_gen_and_transform(dggrid_instance):
@@ -23,13 +24,8 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     - grid_cellids_for_extent(): get_all_indexes/cell_ids for dggs at resolution (clip or world)
     - cells_for_geo_points(): poly_outline for point/centre at resolution
 
-    Unfortunately, the DGGRID API  has changed the cell_id column over the years:
-    # possible column names: 'name', 'Name', 'global_id'
-    name_col = 'name'
-    for potential_name_col in ['name', 'Name', 'global_id']:
-        if potential_name_col in gdf.columns:
-            name_col = potential_name_col
-            break
+    The cell_id column of the returned GeoDataFrames is always 'name'
+    (DGGRID itself uses 'name', 'Name' or 'global_id', depending on the output driver).
     """
 
     est_bound = shapely.geometry.box(20.2,57.00, 28.4,60.0 )
@@ -46,12 +42,17 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     print(gdf2_a.head(3))
     # gdf2_a.to_file('/tmp/est_shape_isea7h_6.shp')
 
-    gdf3 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 8, clip_geom=est_bound, output_address_type='Z7')
-    # print(gdf3.head())
+    # hierarchical indexes with DGGRIDv8: HIERNDX plus the index system and its form (INT64 is written as hex string)
+    gdf3 = dggrid_instance.grid_cell_polygons_for_extent('ISEA7H', 8, clip_geom=est_bound, output_address_type='HIERNDX',
+                                                         output_cell_label_type='OUTPUT_ADDRESS_TYPE',
+                                                         output_hier_ndx_system='Z7', output_hier_ndx_form='INT64')
+    print(gdf3.head(3))
     # gdf3.to_file('/tmp/est_shape_isea7h_8.shp')
 
-    gdf3_a = dggrid_instance.grid_cell_polygons_for_extent('ISEA3H', 9, clip_geom=est_bound, output_address_type='Z3_STRING')
-    print(gdf3.head(3))
+    gdf3_a = dggrid_instance.grid_cell_polygons_for_extent('ISEA3H', 9, clip_geom=est_bound, output_address_type='HIERNDX',
+                                                           output_cell_label_type='OUTPUT_ADDRESS_TYPE',
+                                                           output_hier_ndx_system='Z3', output_hier_ndx_form='DIGIT_STRING')
+    print(gdf3_a.head(3))
     # gdf3_a.to_file('/tmp/est_shape_isea7h_9.shp')
 
     gdf_centroids = dggrid_instance.grid_cell_centroids_for_extent(dggs_type='ISEA7H', resolution=4, mixed_aperture_level=None, clip_geom=None)
@@ -72,7 +73,7 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     print(gdf4.head(3))
     # gdf4.to_file('/tmp/from_seqnums_isea7h_5.shp')
 
-    gdf4 = dggrid_instance.grid_cell_polygons_from_cellids(cell_list_est, 'ISEA7H', 5, clip_subset_type='SEQNUMS', input_address_type='SEQNUM')
+    gdf4 = dggrid_instance.grid_cell_polygons_from_cellids(cell_list_est, 'ISEA7H', 5, input_address_type='SEQNUM', output_address_type='SEQNUM')
     print(gdf4.head(3))
     # gdf4.to_file('/tmp/from_seqnums_isea7h_5.shp')
 
@@ -95,31 +96,34 @@ def highlevel_grid_gen_and_transform(dggrid_instance):
     print(gdf7.head(3))
     # gdf7.to_file('/tmp/global_isea7h_3_interrupted.shp')
 
-    gdf_z1 = dggrid_instance.grid_cell_polygons_for_extent('IGEO7', 5, clip_geom=est_bound, output_address_type='Z7_STRING')
+    # IGEO7 with the Z7 index: dggs_vert0_lon 11.20 and WGS84 <-> authalic conversion, the wrappers do both
+    gdf_z1 = igeo7_ext.dggrid_igeo7_grid_cell_polygons_for_extent(est_bound, 5, dggrid_instance)
     print(gdf_z1.head(3))
 
-    gdf_z1['resolution'] = gdf_z1['global_id'].apply(igeo7.get_z7string_resolution)
+    gdf_z1['resolution'] = gdf_z1['name'].apply(igeo7.get_z7string_resolution)
     print(gdf_z1.head(3))
 
-    df_q2di = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='Q2DI')
+    df_q2di = igeo7_ext.dggrid_igeo7_q2di_from_cellids(gdf_z1['name'], dggrid_instance)
     print(df_q2di.head(3))
 
-    df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, input_address_type='Z7_STRING', output_address_type='PROJTRI')
+    # the same without the wrappers: the DGGRID parameters as a dict, and the conversion by hand
+    meta_config = igeo7_ext.igeo7_meta_config()
+
+    df_tri = dggrid_instance.address_transform(gdf_z1['name'].values, 'IGEO7', 5, **{**meta_config, 'output_address_type': 'PROJTRI'})
     print(df_tri.head(3))
 
-    # this might not work with higher resolution (9) without GDAL datatypes (Shapefile index column length constraint)
-    # FATAL ERROR: DgOutShapefile::writeDbf() index string length of 12 exceeds value of parameter shapefile_id_field_length.
+    # COARSE_CELLS is a spatial clip: all cells at resolution 9 that intersect the cell at resolution 7,
+    # the index children are those that start with the id of the coarse cell
     children = dggrid_instance.grid_cell_polygons_from_cellids(
-        cell_id_list=['000125023'],    # the input/parent cell id
+        cell_id_list=['000102245'],      # the coarse cell id
         dggs_type='IGEO7',               # dggs type
-        resolution=9,                   # target resolution of children
-        clip_subset_type='COARSE_CELLS', # new parameter
-        clip_cell_res=7,                 # resolution of parent cell
-        input_address_type='Z7_STRING',  # address_type
-        output_address_type='Z7_STRING'  # address_type
+        resolution=9,                    # target resolution
+        clip_subset_type='COARSE_CELLS',
+        clip_cell_res=7,                 # resolution of the coarse cell
+        **meta_config
     )
+    children['geometry'] = geoseries_to_geodetic(children.geometry)
     print(children.head(3))
-
 
 
 def highlevel_grid_stats(dggrid_instance):
@@ -152,14 +156,11 @@ if __name__ == '__main__':
 
     import os
 
-    if not os.environ['DGGRID_PATH'] is None:
-        dggrid_path = os.environ['DGGRID_PATH']
-    
-    debug_mode = False
-    if not os.environ['DGGRID_DEBUG'] is None:
-        debug_mode = True if str(os.environ['DGGRID_DEBUG']).lower() == 'true' else False
+    dggrid_path = os.environ.get('DGGRID_PATH', dggrid_path)
 
-    dggrid = DGGRIDv7(executable=dggrid_path, working_dir='/tmp', capture_logs=True, silent=False)
+    debug_mode = str(os.environ.get('DGGRID_DEBUG', 'false')).lower() == 'true'
+
+    dggrid = DGGRIDv8(executable=dggrid_path, working_dir='/tmp', capture_logs=True, silent=False, debug=debug_mode)
 
     highlevel_grid_gen_and_transform(dggrid)
 
