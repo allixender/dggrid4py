@@ -224,6 +224,20 @@ input_address_types_v8 = get_args(DggsInputAddressTypeV8T)
 
 DggsInputAddressTypeT = DggsInputAddressTypeV7T | DggsInputAddressTypeV8T
 
+# DGGRIDv7 names of the hierarchical index address types, and their DGGRIDv8 HIERNDX form
+# as (hier_ndx_system, hier_ndx_form)
+legacy_hier_ndx_address_types = {
+    'Z3': ('Z3', 'INT64'),
+    'Z3_STRING': ('Z3', 'DIGIT_STRING'),
+    'Z7': ('Z7', 'INT64'),
+    'Z7_STRING': ('Z7', 'DIGIT_STRING'),
+    'ZORDER': ('ZORDER', 'INT64'),
+    'ZORDER_STRING': ('ZORDER', 'DIGIT_STRING'),
+}
+
+# column names DGGRID uses for the cell id in its geo outputs, depending on the output driver
+cell_id_columns = ['name', 'Name', 'global_id']
+
 input_extra_fields_v7 = {}
 
 DggsInputHierNdxSystemT = Literal['Z3', 'Z7', 'ZORDER']
@@ -507,6 +521,10 @@ def dg_grid_meta(dggs: "Dggs") -> DggridMetafileT:
     dggs_meta.update(specify_resolution(**dggs_meta))
     dggs_meta.update(specify_topo_aperture(**dggs_meta))
     dggs_meta.update(specify_orient_type_args(**dggs_meta))
+    if dggs_meta.get('dggs_aperture') == 43:
+        # ISEA43H / FULLER43H: 43 is not a DGGRID aperture, the mixed sequence is an aperture type
+        dggs_meta.pop('dggs_aperture')
+        dggs_meta['dggs_aperture_type'] = 'MIXED43'
     metafile = [
         f"{param} {val}"
         for param, val in dggs_meta.items()
@@ -643,7 +661,7 @@ class DGGRID(abc.ABC):
         self.last_run_successful = False
         self.last_run_logs = ''
         self.last_ops_meta = {}
-        self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy)
+        self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy, has_gdal=has_gdal)
         self.has_gdal = has_gdal
         self.debug = debug
 
@@ -703,6 +721,66 @@ class DGGRID(abc.ABC):
                 input_conf_extra[conf] = _in
         return input_conf_extra
 
+    def resolve_address_type(
+        self,
+        direction: Literal['input', 'output'],
+        address_type: str | None,
+        conf_extra: dict[str, DggridMetaConfigParameterT],
+    ) -> str | None:
+        """
+        checks an input or output address type against the address types of this DGGRID version
+
+        - a DGGRIDv7 hierarchical index name (e.g. 'Z7_STRING') is mapped to its HIERNDX form on DGGRIDv8,
+          with a DeprecationWarning, and the hier_ndx fields are added to conf_extra (if not set already)
+        - any other address type that is not available raises a ValueError, instead of being ignored
+        - if address_type is None, the value from conf_extra is used (and updated there), if there is one
+        """
+        key = f"{direction}_address_type"
+        from_extra = address_type is None and conf_extra.get(key) is not None
+        if from_extra:
+            address_type = conf_extra[key]
+        if address_type is None:
+            return None
+
+        allowed = self.input_address_types if direction == 'input' else self.output_address_types
+        if address_type not in allowed:
+            if address_type in legacy_hier_ndx_address_types and 'HIERNDX' in allowed:
+                system, form = legacy_hier_ndx_address_types[address_type]
+                warnings.warn(
+                    f"{key} '{address_type}' is the DGGRIDv7 form and is removed in DGGRID 9, "
+                    f"use {key}='HIERNDX' with {direction}_hier_ndx_system='{system}' and {direction}_hier_ndx_form='{form}'",
+                    DeprecationWarning,
+                    stacklevel=3,
+                )
+                address_type = 'HIERNDX'
+                conf_extra.setdefault(f"{direction}_hier_ndx_system", system)
+                conf_extra.setdefault(f"{direction}_hier_ndx_form", form)
+                if direction == 'output':
+                    conf_extra.setdefault('output_cell_label_type', 'OUTPUT_ADDRESS_TYPE')
+            elif address_type == 'HIERNDX':
+                raise ValueError(f"{key} 'HIERNDX' is not available with {type(self).__name__}, use DGGRIDv8")
+            else:
+                raise ValueError(f"unknown {key}: '{address_type}', allowed with {type(self).__name__} are {list(allowed)}")
+
+        if from_extra:
+            conf_extra[key] = address_type
+        return address_type
+
+    def read_geo_out(self, path: Path) -> gpd.GeoDataFrame:
+        """
+        reads a DGGRID geo output file, the cell id column is always 'name' and the CRS is EPSG:4326
+
+        DGGRID calls the cell id column differently depending on the output driver ('global_id' without GDAL).
+        The coordinates are DGGRID's lon/lat in degrees.
+        """
+        gdf = gpd.read_file(Path(path).resolve(), engine="pyogrio")
+        if 'name' not in gdf.columns:
+            for col in cell_id_columns:
+                if col in gdf.columns:
+                    gdf = gdf.rename(columns={col: 'name'})
+                    break
+        return gdf.set_crs(4326, allow_override=True)
+
     def check_gdal_support(self):
         if self.has_gdal:
             print(f"GDAL types should be possible: has GDAL={self.has_gdal}")
@@ -759,9 +837,7 @@ class DGGRID(abc.ABC):
                 print(dggs_meta_ops)
 
             logs = []
-            o = subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-
-            while o.poll() is None:
+            with subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
                 for b_line in o.stdout:
                     line = b_line.decode().strip()
                     # sys.stdout.write(line)
@@ -842,6 +918,7 @@ class DGGRID(abc.ABC):
                     # output_first_seqnum and output_last_seqnum
                     # this should now almost never happen
                     subset_conf['clip_subset_type'] = 'WHOLE_EARTH'
+                    subset_conf.pop('input_address_type', None)
                     metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                     # loading seqnums
                     files = subset_conf['clip_region_files'].split(' ')
@@ -1301,7 +1378,9 @@ class DGGRID(abc.ABC):
         """
         generates the area and cell statistics for the given DGGS from resolution 0 to the given resolution of the DGGS
         """
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
+        stats_dggs_type = 'ISEA7H' if dggs_type == 'IGEO7' else dggs_type
+        dggs = dgselect(dggs_type = stats_dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
 
         dggs_ops = self.dgapi_grid_stats(dggs)
         if self.debug:
@@ -1331,6 +1410,8 @@ class DGGRID(abc.ABC):
             a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
         """
+        self.resolve_address_type('input', None, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1364,17 +1445,14 @@ class DGGRID(abc.ABC):
             })
             output_conf.pop('cell_output_gdal_format', None)
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
         if self.debug:
             print(dggs_ops)
 
         path = Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}"
-        gdf = gpd.read_file(path.resolve(), engine="pyogrio")
+        gdf = self.read_geo_out(path)
 
         if not self.debug:
             try:
@@ -1415,6 +1493,8 @@ class DGGRID(abc.ABC):
             a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
         """
+        self.resolve_address_type('input', None, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1448,17 +1528,14 @@ class DGGRID(abc.ABC):
             })
             output_conf.pop('point_output_gdal_format', None)
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", engine="pyogrio" )
+        gdf = self.read_geo_out(Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}")
 
         if not self.debug:
             try:
@@ -1499,8 +1576,13 @@ class DGGRID(abc.ABC):
         """
         generates a DGGS grid and returns all the cells as GeoDataFrame with geometry type Polygon
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
-            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, ZORDER ..?) for subsetting
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (or as the given input_address_type) for subsetting
+            c) with clip_subset_type='COARSE_CELLS', cell_id_list are coarser cells at clip_cell_res, and the cells at
+               resolution that intersect them are returned. This is a spatial clip, not the index children: it includes
+               cells of neighbouring parents that overlap, and over several resolutions it can miss index descendants.
         """
+        input_address_type = self.resolve_address_type('input', input_address_type, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1510,7 +1592,7 @@ class DGGRID(abc.ABC):
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
                                                                clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                               resolution=resolution, **conf_extra)
+                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1535,17 +1617,14 @@ class DGGRID(abc.ABC):
             })
             output_conf.pop('cell_output_gdal_format', None)
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf)
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", engine="pyogrio" )
+        gdf = self.read_geo_out(Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}")
 
         if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
@@ -1559,14 +1638,8 @@ class DGGRID(abc.ABC):
                 seq_df[input_address_type] = seq_df[input_address_type].astype(np.int64)
 
             # seq_df.set_index(input_address_type, inplace=True)
-            # possible column names: 'name', 'Name', 'global_id'
-            name_col = 'name'
-            for potential_name_col in ['name', 'Name', 'global_id']:
-                if potential_name_col in gdf.columns:
-                    name_col = potential_name_col
-                    break
             if output_address_type in ['SEQNUM']:
-                gdf[name_col] = gdf[name_col].astype(np.int64)
+                gdf['name'] = gdf['name'].astype(np.int64)
             # gdf = gdf.join( seq_df, how='inner', left_on=name_col, right_on=input_address_type)
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
@@ -1610,8 +1683,12 @@ class DGGRID(abc.ABC):
         """
         generates a DGGS grid and returns all the cell's centroid as GeoDataFrame with geometry type Point
             a) if cell_id_list is empty/None: grid cells for the WHOLE_EARTH
-            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER) for subsetting
+            b) if cell_id_list is a list/numpy array, takes this list as seqnums ids (or as the given input_address_type) for subsetting
+            c) with clip_subset_type='COARSE_CELLS', cell_id_list are coarser cells at clip_cell_res (a spatial clip,
+               not the index children, see grid_cell_polygons_from_cellids)
         """
+        input_address_type = self.resolve_address_type('input', input_address_type, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1620,7 +1697,8 @@ class DGGRID(abc.ABC):
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
-                                                               clip_cell_res=clip_cell_res, cell_id_list=cell_id_list, **conf_extra)
+                                                               clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
+                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1645,17 +1723,14 @@ class DGGRID(abc.ABC):
             output_conf.pop('point_output_gdal_format', None)
 
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
         if self.debug:
             print(dggs_ops)
 
-        gdf = gpd.read_file( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}", engine="pyogrio" )
+        gdf = self.read_geo_out(Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}")
 
         if not cell_id_list is None and len(cell_id_list) > 0 and not seq_df is None:
             # we have to adjust the columns formats for the IDs/Seqnums/Name field to ensure they are comparable for the join
@@ -1669,9 +1744,8 @@ class DGGRID(abc.ABC):
                 seq_df[input_address_type] = seq_df[input_address_type].astype(np.int64)
 
             # seq_df.set_index(input_address_type, inplace=True)
-            name_col = 'name' if 'name' in gdf.columns else 'Name'
             if output_address_type in ['SEQNUM']:
-                gdf[name_col] = gdf[name_col].astype(np.int64)
+                gdf['name'] = gdf['name'].astype(np.int64)
             # gdf = gdf.join( seq_df, how='inner', on=name_col)
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
@@ -1707,6 +1781,8 @@ class DGGRID(abc.ABC):
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
             TODO could cellids be generated for COARSE_CELLS? Generate child id from list of parent ids?
         """
+        self.resolve_address_type('input', None, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1732,11 +1808,8 @@ class DGGRID(abc.ABC):
             **output_extras
         }
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_gen(dggs, subset_conf, output_conf )
         if self.debug:
@@ -1776,23 +1849,29 @@ class DGGRID(abc.ABC):
     ) -> gpd.GeoDataFrame:
         """
         takes a GeoDataFrame with point geometry and optional additional value columns and returns:
-            a) if cell_ids_only == True: the same GeoDataFrame with an additional column with the cell ids
-            b) if cell_ids_only == False: a new GeoDataFrame with geometry type Polygon, with column of cell ids and the additional columns
+            a) if cell_ids_only == True: a copy of the GeoDataFrame with the columns 'lon', 'lat' and the cell ids in 'name'
+            b) if cell_ids_only == False: a new GeoDataFrame with geometry type Polygon, the cell ids in 'zone', and the additional columns
+
+        The input GeoDataFrame is not modified. DGGRID takes the coordinates as lon/lat on its sphere, without a datum
+        conversion. For IGEO7 the points have to be converted to authalic latitudes before (see dggrid4py.auxlat), or use
+        dggrid4py.igeo7_ext.dggrid_igeo7_cells_for_geo_points, which does the conversion and returns the WGS84 points.
         """
+        self.resolve_address_type('input', None, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
         dggs.update(**conf_extra, strict=True)
 
-        cols = set(geodf_points_wgs84.columns.tolist())
-        cols = cols - {'geometry'}
-        geodf_points_wgs84['lon'] = geodf_points_wgs84['geometry'].x
-        geodf_points_wgs84['lat'] = geodf_points_wgs84['geometry'].y
-        cols_ordered = ['lon', 'lat']
-        for col_name in cols:
-            cols_ordered.append(col_name)
+        # work on a copy, the caller's GeoDataFrame stays as it is
+        geodf_points_wgs84 = geodf_points_wgs84.copy()
+        geom_col = geodf_points_wgs84.geometry.name
+        geodf_points_wgs84['lon'] = geodf_points_wgs84.geometry.x
+        geodf_points_wgs84['lat'] = geodf_points_wgs84.geometry.y
+        cols_ordered = ['lon', 'lat'] + [col for col in geodf_points_wgs84.columns if col not in (geom_col, 'lon', 'lat')]
 
-        geodf_points_wgs84[cols_ordered].to_csv( str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()) , header=False, index=False, columns=cols_ordered, sep=' ')
+        # only the coordinates go to DGGRID, the other columns are attached again by position
+        geodf_points_wgs84[['lon', 'lat']].to_csv( str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()) , header=False, index=False, sep=' ')
 
         subset_conf: DggridMetaConfigT = {
             'input_file_name':  str( (Path(tmp_dir) / f"geo_{tmp_id}.txt").resolve()),
@@ -1814,11 +1893,8 @@ class DGGRID(abc.ABC):
             **output_extras
         }
 
-        if not output_address_type is None and output_address_type in self.output_address_types:
+        if output_address_type is not None:
             output_conf.update({'output_address_type': output_address_type})
-        else:
-            if self.debug:
-                print(f"ignoring unknown output_address_type: {output_address_type}")
 
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, **output_conf)
         if self.debug:
@@ -1844,6 +1920,12 @@ class DGGRID(abc.ABC):
             # grid_gen from seqnums
             dggs_conf = dggs.to_dict()
             new_input_address_type = output_address_type if (output_address_type is not None) else "SEQNUM"
+            # the cell ids come back in the output form, so the same hierarchical index fields apply as input
+            address_extras = dict(output_extras)
+            for field, value in output_extras.items():
+                input_field = field.replace('output_', 'input_', 1)
+                if input_field in self.input_extra_fields:
+                    address_extras[input_field] = value
             gdf = self.grid_cell_polygons_from_cellids(
                 cell_id_list=cell_id_list,
                 # dggs_type=dggs_type,  passed via dggs_conf
@@ -1852,14 +1934,17 @@ class DGGRID(abc.ABC):
                 input_address_type=new_input_address_type,
                 output_address_type=output_address_type,
                 **dggs_conf,  # ensure any extra parameters are passed on
+                **address_extras,
             )
-            try:
-                # avoid conflict between input 'name' column and generated 'name' Zone ID
-                gdf.rename(columns={'name': 'zone'}, inplace=True)
-                for col in cols_ordered:
-                    gdf[col] = geodf_points_wgs84[col].values
-            except Exception:
-                pass
+            # avoid conflict between input 'name' column and generated 'name' Zone ID
+            gdf = gdf.rename(columns={'name': 'zone'})
+            # DGGRID returns each cell once and in its own order, so the cells are matched to the points
+            # by cell id: one row per input point, in the order of the points
+            cells = gdf.drop_duplicates('zone')
+            cells = cells.set_index(cells['zone'].astype(str))
+            gdf = cells.loc[[str(cell_id) for cell_id in cell_id_list]].reset_index(drop=True)
+            for col in cols_ordered:
+                gdf[col] = geodf_points_wgs84[col].values
 
             if split_dateline:
                 return self.post_process_split_dateline(gdf)
@@ -1880,7 +1965,12 @@ class DGGRID(abc.ABC):
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
             cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER)
+            the columns of the returned DataFrame are named after the given input and output address types
         """
+        # column names as given by the caller, also if a DGGRIDv7 name is mapped to HIERNDX
+        input_column, output_column = input_address_type, output_address_type
+        input_address_type = self.resolve_address_type('input', input_address_type, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
         dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
@@ -1888,12 +1978,6 @@ class DGGRID(abc.ABC):
 
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
-
-        if not input_address_type in self.input_address_types:
-            raise ValueError(f"unknown input_address_type: {input_address_type}")
-
-        if not output_address_type in self.output_address_types:
-            raise ValueError(f"unknown output_address_type: {output_address_type}")
 
         seq_df = pd.DataFrame({ input_address_type: cell_id_list})
         seq_df.to_csv( str( (Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt").resolve()) , header=False, index=False, columns=[input_address_type], sep=' ')
@@ -1922,6 +2006,7 @@ class DGGRID(abc.ABC):
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0:'str', 1:'str'})
         df = df.dropna()
         seq_df[output_address_type] = df.iloc[:,0]
+        seq_df = seq_df.rename(columns={input_address_type: input_column, output_address_type: output_column})
 
         if not self.debug:
             try:
@@ -1952,9 +2037,9 @@ class DGGRIDv8(DGGRID):
 class AnyDGGRID(DGGRID):
     version = 0
     output_address_types: DggsOutputAddressTypeT = list(set(output_address_types_v7) | set(output_address_types_v8))
-    output_extra_fields = list(set(output_extra_fields_v7) | set(output_extra_fields_v8))
+    output_extra_fields = {**output_extra_fields_v7, **output_extra_fields_v8}
     input_address_types: DggsInputAddressTypeT = list(set(input_address_types_v7) | set(input_address_types_v8))
-    input_extra_fields = list(set(input_extra_fields_v7) | set(input_extra_fields_v8))
+    input_extra_fields = {**input_extra_fields_v7, **input_extra_fields_v8}
 
 
 #############################################################
@@ -2186,6 +2271,7 @@ def specify_clip_settings(
     clip_cell_res: int = None,
     cell_id_list: list = None,
     resolution: int = 9,
+    seqnums_clip: bool = False,
     **conf_extra: DggridMetaConfigParameterT,
 ) -> DggridMetaConfigT:
 
@@ -2203,9 +2289,10 @@ def specify_clip_settings(
         seq_df.to_csv(str((Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve()),
                       header=False, index=False, columns=[input_address_type], sep=' ')
         clip_metafile_settings.update({'clip_region_files': str((Path(tmp_dir) / f"temp_clip_{tmp_id}.txt").resolve())})
-        if (input_address_type == "SEQNUM"):
+        if (input_address_type == "SEQNUM" and seqnums_clip):
+            # clip_subset_type SEQNUMS is the DGGRID 7 form, it is removed in DGGRID 9
             clip_metafile_settings.update({'clip_subset_type': 'SEQNUMS'})
-        if (input_address_type != "SEQNUM"):
+        else:
             clip_metafile_settings.update({'clip_subset_type': 'INPUT_ADDRESS_TYPE'})
             clip_metafile_settings.update({'input_address_type': input_address_type})
             if (clip_subset_type == "COARSE_CELLS"):

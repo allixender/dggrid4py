@@ -534,7 +534,8 @@ def test_cells_for_geo_points(monkeypatch):
         "dggs_vert0_lat 58.282525588538994675786",
         "dggs_vert0_lon 11.20",
         # following enforced by function to align with input of previous transform step
-        "clip_subset_type SEQNUMS",
+        "clip_subset_type INPUT_ADDRESS_TYPE",
+        "input_address_type SEQNUM",
         "cell_output_type GDAL",
         "cell_output_gdal_format FlatGeobuf",
         "point_output_type NONE",
@@ -553,20 +554,7 @@ def test_cells_for_geo_points(monkeypatch):
         [
             {
                 "type": "Feature",
-                "properties": {"zone": "51695", "name": "A", "lon": 20.5, "lat": 57.5},
-                "geometry": {"type": "Polygon", "coordinates": [[
-                    [21.189511635794823, 58.2893639588515],
-                    [20.950622414770574, 58.00135094074029],
-                    [21.232988751914608, 57.69437147048094],
-                    [21.74777706813212, 57.674593541688374],
-                    [21.990765226755794, 57.96161815328658],
-                    [21.71493417563983, 58.2694113005297],
-                    [21.189511635794823, 58.2893639588515],
-                ]]}
-            },
-            {
-                "type": "Feature",
-                "properties": {"zone": "51548", "name": "B", "lon": 21.0, "lat": 58.0},
+                "properties": {"zone": "51548", "name": "A", "lon": 20.5, "lat": 57.5},
                 "geometry": {"type": "Polygon", "coordinates": [[
                     [20.430061092474467, 58.01819524792648],
                     [20.20251122281021, 57.727966938664856],
@@ -577,7 +565,26 @@ def test_cells_for_geo_points(monkeypatch):
                     [20.430061092474467, 58.01819524792648],
                 ]]}
             },
+            {
+                "type": "Feature",
+                "properties": {"zone": "51695", "name": "B", "lon": 21.0, "lat": 58.0},
+                "geometry": {"type": "Polygon", "coordinates": [[
+                    [21.189511635794823, 58.2893639588515],
+                    [20.950622414770574, 58.00135094074029],
+                    [21.232988751914608, 57.69437147048094],
+                    [21.74777706813212, 57.674593541688374],
+                    [21.990765226755794, 57.96161815328658],
+                    [21.71493417563983, 58.2694113005297],
+                    [21.189511635794823, 58.2893639588515],
+                ]]}
+            },
         ],
         columns=result.columns,  # ensure ordering matches to allow compare
+        crs=4326,
     )
     assert_geodataframe_equal(result, expect, check_less_precise=True)
+
+    # one row per input point, in the order of the points: each cell contains its own point
+    assert all(cell.contains(point) for cell, point in zip(result.geometry, points))
+    # the input GeoDataFrame is not modified
+    assert list(geodf_points_wgs84.columns) == ["name", "geometry"]

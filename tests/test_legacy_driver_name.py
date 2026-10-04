@@ -32,7 +32,7 @@ def test_grid_cell_polygons_for_extent():
     legacy_test = portable_dggrid.grid_cell_polygons_for_extent("IGEO7", 3, clip_geom=clip_bound, output_address_type='Z7_STRING')
     test = gdal_dggrid.grid_cell_polygons_for_extent("IGEO7", 3, clip_geom=clip_bound, output_address_type='Z7_STRING')
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 
@@ -40,7 +40,7 @@ def test_grid_cell_centroid_for_extent():
     legacy_test = portable_dggrid.grid_cell_centroids_for_extent("IGEO7", 3, clip_geom=clip_bound, output_address_type='Z7_STRING')
     test = gdal_dggrid.grid_cell_centroids_for_extent("IGEO7", 3, clip_geom=clip_bound, output_address_type='Z7_STRING')
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 
@@ -48,7 +48,7 @@ def test_grid_cell_polygons_from_cellids():
     legacy_test = portable_dggrid.grid_cell_polygons_from_cellids(cellids100, "IGEO7", 3, input_address_type='Z7_STRING', output_address_type='Z7_STRING')
     test = gdal_dggrid.grid_cell_polygons_from_cellids(cellids100, "IGEO7", 3, input_address_type='Z7_STRING', output_address_type='Z7_STRING')
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 
@@ -56,7 +56,7 @@ def test_grid_cell_centroids_from_cellids():
     legacy_test = portable_dggrid.grid_cell_centroids_from_cellids(cellids100, "IGEO7", 3, input_address_type='Z7_STRING', output_address_type='Z7_STRING')
     test = gdal_dggrid.grid_cell_centroids_from_cellids(cellids100, "IGEO7", 3, input_address_type='Z7_STRING', output_address_type='Z7_STRING')
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 
@@ -67,7 +67,7 @@ def test_grid_cell_polygons_from_cellids_coarse_cells():
                                                        input_address_type='Z7_STRING', output_address_type='Z7_STRING')
 
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 def test_grid_cell_centroid_from_cellids_coarse_cells():
@@ -76,7 +76,7 @@ def test_grid_cell_centroid_from_cellids_coarse_cells():
     test = gdal_dggrid.grid_cell_centroids_from_cellids(cellids100, "IGEO7", 5, clip_subset_type='COARSE_CELLS', clip_cell_res=3,
                                                         input_address_type='Z7_STRING', output_address_type='Z7_STRING')
     test = set(test.sort_values('name')['name'])
-    legacy_test = set(legacy_test.sort_values('global_id')['global_id'])
+    legacy_test = set(legacy_test.sort_values('name')['name'])
     assert len(test - legacy_test) == 0
 
 
