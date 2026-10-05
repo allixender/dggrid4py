@@ -5,6 +5,7 @@ import io
 import os
 import shutil
 import tarfile
+import urllib.error
 import zipfile
 from pathlib import Path
 
@@ -33,6 +34,15 @@ def test_portable_asset_name_unsupported_platform():
         tool.portable_asset_name("FreeBSD", "riscv64")
 
 
+def test_portable_release_lines():
+    assert tool.DEFAULT_LINE == "stable"
+    assert tool.portable_release() == tool.PORTABLE_LINES["stable"] == "v8.44"
+    assert tool.portable_release("edge") == "edge"
+    # any other value is the release tag itself
+    assert tool.portable_release("edge-v91b") == "edge-v91b"
+    assert tool.portable_release("v8.44") == "v8.44"
+
+
 def _tar_gz(path, members):
     with tarfile.open(path, "w:gz") as archive:
         for name, content in members.items():
@@ -49,6 +59,7 @@ class _Release:
         self.source = tmp_path / "release"
         self.source.mkdir()
         self.fetched = []
+        self.releases = []
         self.offline = False
         if members is None:
             members = {"dggrid-9.0b-linux-x86_64/dggrid": b"#!/bin/sh\n", "dggrid-9.0b-linux-x86_64/LICENSE": b"AGPL"}
@@ -70,8 +81,11 @@ class _Release:
     def fetch(self, url, local_path):
         if self.offline:
             raise OSError("no network")
-        assert url.startswith(f"{tool.PORTABLES_URL}/edge/")
-        name = url.split("/")[-1]
+        assert url.startswith(f"{tool.PORTABLES_URL}/")
+        release, name = url[len(tool.PORTABLES_URL) + 1:].split("/")
+        if release == "missing":
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        self.releases.append(release)
         self.fetched.append(name)
         shutil.copyfile(self.source / name, local_path)
 
@@ -80,12 +94,14 @@ def test_get_portable_executable_unpacks_and_caches(tmp_path, monkeypatch):
     release = _Release(tmp_path, monkeypatch)
     folder = tmp_path / "bin"
 
+    # the default line is 'stable', each release gets its own subfolder
     executable = tool.get_portable_executable(folder)
-    assert executable == str((folder / "dggrid-9.0b-linux-x86_64" / "dggrid").resolve())
+    assert executable == str((folder / "v8.44" / "dggrid-9.0b-linux-x86_64" / "dggrid").resolve())
     assert os.access(executable, os.X_OK)
     assert release.fetched == ["SHA256SUMS", release.asset]
+    assert set(release.releases) == {"v8.44"}
     # no archive or checksum list is left behind
-    assert sorted(p.name for p in folder.iterdir() if not p.name.startswith(".")) == ["dggrid-9.0b-linux-x86_64"]
+    assert sorted(p.name for p in (folder / "v8.44").iterdir() if not p.name.startswith(".")) == ["dggrid-9.0b-linux-x86_64"]
 
     # same release checksum: the binary is used again, only the checksums are looked up
     assert tool.get_portable_executable(folder) == executable
@@ -98,13 +114,36 @@ def test_get_portable_executable_unpacks_and_caches(tmp_path, monkeypatch):
     # the rolling release was rebuilt: downloaded again
     release.build({"dggrid-9.1-linux-x86_64/dggrid": b"#!/bin/sh\necho new\n"})
     rebuilt = tool.get_portable_executable(folder)
-    assert rebuilt == str((folder / "dggrid-9.1-linux-x86_64" / "dggrid").resolve())
+    assert rebuilt == str((folder / "v8.44" / "dggrid-9.1-linux-x86_64" / "dggrid").resolve())
 
     # offline: the binary that is already there is returned
     release.offline = True
     assert tool.get_portable_executable(folder) == rebuilt
     with pytest.raises(OSError):
         tool.get_portable_executable(tmp_path / "empty")
+
+
+def test_get_portable_executable_lines_side_by_side(tmp_path, monkeypatch):
+    release = _Release(tmp_path, monkeypatch)
+    folder = tmp_path / "bin"
+
+    stable = tool.get_portable_executable(folder)
+    edge = tool.get_portable_executable(folder, line="edge")
+    other = tool.get_portable_executable(folder, line="edge-v91b")
+    assert release.releases == ["v8.44", "v8.44", "edge", "edge", "edge-v91b", "edge-v91b"]
+    assert [Path(p).relative_to(folder.resolve()).parts[0] for p in (stable, edge, other)] == ["v8.44", "edge", "edge-v91b"]
+    assert all(os.path.isfile(p) for p in (stable, edge, other))
+
+    # the binaries of the other lines stay in place
+    assert tool.get_portable_executable(folder, line="stable") == stable
+    assert tool.get_portable_executable(folder, line="edge") == edge
+
+
+def test_get_portable_executable_unknown_release(tmp_path, monkeypatch):
+    _Release(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="no portable DGGRID release 'missing'"):
+        tool.get_portable_executable(tmp_path / "bin", line="missing")
+    assert not (tmp_path / "bin" / "missing").exists()
 
 
 def test_get_portable_executable_zip(tmp_path, monkeypatch):
@@ -120,7 +159,7 @@ def test_get_portable_executable_checksum_mismatch(tmp_path, monkeypatch):
     (release.source / "SHA256SUMS").write_text(f"{'0' * 64}  {release.asset}\n")
     with pytest.raises(ValueError, match="checksum of dggrid-linux-x86_64.tar.gz does not match"):
         tool.get_portable_executable(tmp_path / "bin")
-    assert not any(p.name.startswith("dggrid") for p in (tmp_path / "bin").iterdir())
+    assert not any(p.name.startswith("dggrid") for p in (tmp_path / "bin" / "v8.44").iterdir())
 
 
 def test_get_portable_executable_missing_checksum(tmp_path, monkeypatch):

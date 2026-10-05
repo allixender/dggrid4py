@@ -135,7 +135,7 @@ The former address type `Z7_STRING` of the `DGGRIDv7` class is deprecated in DGG
 
 ### Portable DGGRID binary
 
-> **Warning:** the precompiled portable DGGRID binaries are still **experimental**. They are built without GDAL support, and the current download is a pre-release of DGGRID 9. For a reliable setup, use the pixi or conda-forge installation above.
+> **Warning:** the precompiled portable DGGRID binaries are still **experimental** and are built without GDAL support. For a reliable setup, use the pixi or conda-forge installation above.
 
 If DGGRID can neither be installed from conda-forge nor compiled, dggrid4py can download a portable binary from the [DGGRID_portables](https://github.com/allixender/DGGRID_portables) releases (Linux, macOS and Windows, x86_64 and arm64 each):
 
@@ -147,9 +147,12 @@ from dggrid4py import DGGRIDv8, tool
 # downloads and unpacks the binary for the current platform into the given folder (only once)
 dggrid_exec = tool.get_portable_executable("dggrid_portable")
 dggrid_instance_portable = DGGRIDv8(executable=dggrid_exec, working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True, has_gdal=False)
+
+# other lines: "edge" follows the DGGRID development version, or any release tag of DGGRID_portables
+dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")
 ```
 
-The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they have to be used with the `DGGRIDv8` class.
+The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 8.44). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv8` class.
 
 ## TODO:
 

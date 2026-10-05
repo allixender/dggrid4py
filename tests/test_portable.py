@@ -27,12 +27,13 @@ IGEO7 = {
 }
 
 
-@pytest.fixture(scope="module")
-def portable_dggrid(tmp_path_factory):
+# the lines of portable binaries that have to work with this dggrid4py version
+@pytest.fixture(scope="module", params=["stable", "edge"])
+def portable_dggrid(request, tmp_path_factory):
     try:
-        executable = tool.get_portable_executable(tmp_path_factory.mktemp("portable"))
+        executable = tool.get_portable_executable(tmp_path_factory.mktemp("portable"), line=request.param)
     except (OSError, ValueError) as e:
-        pytest.skip(f"portable DGGRID not available: {e}")
+        pytest.skip(f"portable DGGRID '{request.param}' not available: {e}")
     return DGGRIDv8(executable=executable, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True, has_gdal=False)
 
 

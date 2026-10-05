@@ -83,9 +83,9 @@ Portable DGGRID binary
 
 .. warning::
 
-   The precompiled portable DGGRID binaries are still **experimental**. They are built
-   without GDAL support, and the current download is a pre-release of DGGRID 9. For a
-   reliable setup, use the pixi or conda-forge installation described above.
+   The precompiled portable DGGRID binaries are still **experimental** and are built
+   without GDAL support. For a reliable setup, use the pixi or conda-forge installation
+   described above.
 
 If DGGRID can neither be installed from conda-forge nor compiled, dggrid4py can download a portable binary
 from the `DGGRID_portables <https://github.com/allixender/DGGRID_portables>`_ releases. These binaries are
@@ -103,16 +103,27 @@ available for Linux, macOS and Windows (x86_64 and arm64 each) and have no furth
 
 ``get_portable_executable`` verifies the downloaded archive against the SHA256 checksums of the release, unpacks it
 and returns the path of the executable. A binary that is already in the folder is used again, and it is also
-returned if there is no network connection. The following points should be considered:
+returned if there is no network connection. The portable binaries are published in several lines, which are
+selected with the ``line`` argument:
+
+- ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 8.44;
+- ``edge`` is a rolling pre-release that follows the DGGRID development version (currently DGGRID 9.0b), and it is
+  downloaded again after it was rebuilt;
+- any other value is taken as a release tag of DGGRID_portables, e.g. ``edge-v91b`` for a development line or
+  ``v8.44`` for a specific DGGRID release.
+
+.. code:: python
+
+   dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")
+
+Each line is unpacked into its own subfolder, so that several lines can be kept side by side. The following points
+should be considered:
 
 - the binaries are built without GDAL, thus the instance has to be created with ``has_gdal=False``; dggrid4py
   then exchanges Shapefiles with DGGRID, and the returned GeoDataFrames have the same columns and cell identifiers
   as with a GDAL build;
-- the default release ``edge`` is a rolling pre-release that follows the DGGRID development version (currently
-  DGGRID 9.0b), and it is downloaded again after it was rebuilt; a tagged release can be selected with
-  ``release="<tag>"`` once one is published;
 - DGGRID 9 removes the address types ``Z7``, ``Z7_STRING`` and their Z3 and ZORDER counterparts, as well as the
-  ``DGGRIDv7`` way of clipping by sequence numbers, so the portable binary has to be used with the ``DGGRIDv8`` class;
+  ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` class;
 - on Windows arm64, coordinates can differ by up to about 1e-5 degrees from the other platforms (see the release notes).
 
 

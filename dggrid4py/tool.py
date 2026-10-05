@@ -10,13 +10,20 @@ import shutil
 import stat
 import tarfile
 import tempfile
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
 
 PORTABLES_URL = "https://github.com/allixender/DGGRID_portables/releases/download"
+# lines of portable binaries and their release tag in DGGRID_portables:
+# 'stable' is the DGGRID release that this dggrid4py version is tested with,
 # 'edge' is the rolling pre-release, built from the current DGGRID master
-DEFAULT_RELEASE = "edge"
+PORTABLE_LINES = {
+    "stable": "v8.44",
+    "edge": "edge",
+}
+DEFAULT_LINE = "stable"
 CHECKSUMS_FILE = "SHA256SUMS"
 
 _portable_assets = {
@@ -66,7 +73,7 @@ def _make_executable(path):
 
 
 def _release_checksum(release, asset, folder):
-    sums_path = Path(folder) / f".{CHECKSUMS_FILE}.{release}"
+    sums_path = Path(folder) / f".{CHECKSUMS_FILE}"
     _fetch(f"{PORTABLES_URL}/{release}/{CHECKSUMS_FILE}", sums_path)
     try:
         for line in sums_path.read_text().splitlines():
@@ -124,32 +131,46 @@ def download_executable(url, folder="./"):
     return os.path.abspath(local_path)
 
 
-def get_portable_executable(folder="./", release=DEFAULT_RELEASE, force=False):
+def portable_release(line=DEFAULT_LINE):
+    """
+    Release tag in DGGRID_portables for a line of portable binaries.
+
+    ``stable`` and ``edge`` are the lines that dggrid4py knows. Any other value is taken as the release tag
+    itself, e.g. ``edge-v91b`` for a development line or ``v8.44`` for a specific DGGRID release.
+    """
+    return PORTABLE_LINES.get(line, line)
+
+
+def get_portable_executable(folder="./", line=DEFAULT_LINE, force=False):
     """
     Download the portable DGGRID binary for the current platform and return the absolute path of the executable.
 
-    The archive is taken from the DGGRID_portables release, verified against the ``SHA256SUMS`` file of
-    that release, and unpacked into ``folder``. A binary that is already in ``folder`` is used again as long
-    as its checksum is the one of the release, so the rolling ``edge`` release is downloaded again only
-    after it was rebuilt. Without a network connection, a binary that is already in ``folder`` is returned.
+    The archive is taken from the DGGRID_portables release of the given line, verified against the
+    ``SHA256SUMS`` file of that release, and unpacked into a subfolder of ``folder`` that is named after the
+    release. A binary that is already there is used again as long as its checksum is the one of the release,
+    so a rolling release is downloaded again only after it was rebuilt. Without a network connection, a binary
+    that is already there is returned.
 
     Args:
-        folder (str): where the archive is unpacked, created if needed
-        release (str): release tag in DGGRID_portables, default is the rolling pre-release ``edge``
+        folder (str): where the binaries are kept, created if needed
+        line (str): ``stable`` (default, the DGGRID release that this dggrid4py version is tested with),
+            ``edge`` (rolling pre-release of the current DGGRID development version), or any release tag
+            of DGGRID_portables, e.g. ``edge-v91b``
         force (bool): download again, also if the binary is already there
 
     Returns:
         str: absolute path of the ``dggrid`` executable
 
     Raises:
-        ValueError: if there is no portable binary for this platform, or the checksum does not match
+        ValueError: if there is no portable binary for this platform, no such release, or the checksum does not match
     """
     asset = portable_asset_name()
-    folder = Path(folder)
+    release = portable_release(line)
+    folder = Path(folder) / release
     folder.mkdir(parents=True, exist_ok=True)
 
     # remembers checksum and location of the unpacked executable
-    marker = folder / f".{asset}.{release}.sha256"
+    marker = folder / f".{asset}.sha256"
     cached_checksum, cached_executable = None, None
     if marker.is_file():
         cached_checksum, _, relative_path = marker.read_text().strip().partition(' ')
@@ -158,6 +179,15 @@ def get_portable_executable(folder="./", release=DEFAULT_RELEASE, force=False):
 
     try:
         checksum = _release_checksum(release, asset, folder)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            if not any(folder.iterdir()):
+                folder.rmdir()
+            raise ValueError(
+                f"no portable DGGRID release '{release}' (line '{line}') in DGGRID_portables, "
+                f"known lines are {list(PORTABLE_LINES)}"
+            ) from None
+        raise
     except OSError:
         if cached_executable is not None and not force:
             return str(cached_executable.resolve())
