@@ -38,7 +38,9 @@ def test_igeo7_meta_config_and_v8_only():
 
     # the wrappers refuse DGGRIDv7 before DGGRID runs
     with pytest.raises(TypeError):
-        igeo7_ext.dggrid_igeo7_grid_cell_polygons_from_cellids(["000102022"], DGGRIDv7(executable="dggrid"))
+        with pytest.warns(DeprecationWarning, match="DGGRIDv7 is deprecated"):
+            dggrid_v7 = DGGRIDv7(executable="dggrid")
+        igeo7_ext.dggrid_igeo7_grid_cell_polygons_from_cellids(["000102022"], dggrid_v7)
 
 
 def test_authalic_roundtrip_multigeometries():

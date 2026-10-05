@@ -6,7 +6,7 @@ It selects the hierarchical indexes (Z3, Z7, ZORDER) through the address type ``
 parameters of the DGGRID 8 series. The former address type names of the DGGRIDv7 class (e.g. ``Z7_STRING``)
 are mapped to ``HIERNDX`` with a ``DeprecationWarning``, see :doc:`../IGEO7`.
 
-The DGGRIDv7 class is only needed for a DGGRID 7 executable.
+The DGGRIDv7 class for DGGRID 7 is deprecated since version 0.6.0.
 
 How to pass additional parameters to DGGRIDv8:
 

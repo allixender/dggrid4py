@@ -46,7 +46,7 @@ Besides some low-level access to influence the metafile creation of the DGGRID o
 - address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
 - grid_stats_table(): number of cells, cell area and spacing per resolution.
 
-Use the `DGGRIDv8` class for DGGRID 8 (it also runs the 9.0b pre-release). The `DGGRIDv7` class is only needed for a DGGRID 7 executable.
+Use the `DGGRIDv8` class with DGGRID 8.42 or newer (it also runs the 9.0b pre-release). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in a future version.
 
 ```python
 import shutil

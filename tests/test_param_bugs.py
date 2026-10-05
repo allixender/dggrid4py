@@ -45,6 +45,13 @@ def _dggrid(cls=DGGRIDv8):
     return cls(executable=_dggrid_path(), working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
 
 
+def _instance(cls, **kwargs):
+    if cls is DGGRIDv7:
+        with pytest.warns(DeprecationWarning, match="DGGRIDv7 is deprecated"):
+            return cls(**kwargs)
+    return cls(**kwargs)
+
+
 def _points(authalic=True):
     points = gpd.GeoDataFrame(
         {"city": ["Lisbon", "Tartu"]},
@@ -54,6 +61,19 @@ def _points(authalic=True):
     if authalic:
         points["geometry"] = geoseries_to_authalic(points.geometry)
     return points
+
+
+def test_dggrid_v7_class_is_deprecated():
+    with pytest.warns(DeprecationWarning, match="use DGGRIDv8"):
+        dggrid = DGGRIDv7(executable="dggrid", has_gdal=False)
+    # still the same class otherwise
+    assert dggrid.version == 7
+    assert dggrid.has_gdal is False
+    assert "Z7_STRING" in dggrid.output_address_types
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert DGGRIDv8(executable="dggrid").version == 8
 
 
 # address types: unknown ones raise, the DGGRIDv7 hierarchical index names are mapped on DGGRIDv8
@@ -103,7 +123,7 @@ def test_resolve_address_type_from_conf_extra_keeps_explicit_fields():
 
 
 def test_resolve_address_type_v7_keeps_legacy_names():
-    dggrid = DGGRIDv7(executable="dggrid")
+    dggrid = _instance(DGGRIDv7, executable="dggrid")
     conf_extra = {}
     with warnings.catch_warnings():
         warnings.simplefilter("error")
@@ -128,7 +148,7 @@ def test_resolve_address_type_v7_keeps_legacy_names():
     ],
 )
 def test_unknown_address_type_raises_before_dggrid_runs(cls, call, monkeypatch):
-    dggrid = cls(executable="dggrid", working_dir=tempfile.mkdtemp())
+    dggrid = _instance(cls, executable="dggrid", working_dir=tempfile.mkdtemp())
 
     def no_run(__metafile):
         raise AssertionError("DGGRID must not run with an unknown address type")

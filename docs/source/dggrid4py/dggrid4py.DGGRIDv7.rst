@@ -1,6 +1,11 @@
 ﻿dggrid4py.DGGRIDv7
 ==================
 
+.. deprecated:: 0.6.0
+   The DGGRIDv7 class is deprecated and will be removed in a future version. Use :doc:`dggrid4py.DGGRIDv8`
+   with DGGRID 8.42 or newer; it accepts the former address type names (e.g. ``Z7_STRING``) with a
+   ``DeprecationWarning``, see :doc:`../IGEO7`.
+
 .. currentmodule:: dggrid4py
 
 .. autoclass:: DGGRIDv7

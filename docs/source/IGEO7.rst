@@ -214,7 +214,7 @@ Earlier examples for IGEO7 used the ``DGGRIDv7`` class with ``output_address_typ
 
 Since version 0.6.0, the ``DGGRIDv8`` class accepts the old names, maps them according to this table and issues a ``DeprecationWarning``. An address type that is not known at all raises a ``ValueError``. Up to version 0.5.3, ``DGGRIDv8`` ignored an address type that it did not know, without an error, and returned sequence numbers or the cell of another identifier. Results that were produced with ``Z7_STRING`` and ``DGGRIDv8`` in these versions should therefore be checked.
 
-The ``DGGRIDv7`` class keeps the old names and should only be used with a DGGRID 7 executable. Code that moves to ``DGGRIDv8`` continues to work, but it uses the DGGRID preset (11.25, no authalic conversion) as before, as long as the orientation and the conversion are not added as described above.
+The ``DGGRIDv7`` class itself is deprecated since version 0.6.0. It still works with the old names, but it issues a ``DeprecationWarning`` when an instance is created, it does not run with DGGRID 9, and it will be removed in a future version. Code that moves to ``DGGRIDv8`` continues to work, but it uses the DGGRID preset (11.25, no authalic conversion) as before, as long as the orientation and the conversion are not added as described above.
 
 
 API Reference

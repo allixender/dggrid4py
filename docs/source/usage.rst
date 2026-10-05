@@ -136,9 +136,13 @@ functions are integrated to work with the more comfortable geopython libraries, 
 -  grid_stats_table(): number of cells, cell area and spacing per resolution.
 
 The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. Use the
-``DGGRIDv8`` class for DGGRID 8 (it also runs the 9.0b pre-release). The ``DGGRIDv7`` class is only needed
-for a DGGRID 7 executable. The following example uses the classical DGGS types of DGGRID with their default
-orientation.
+``DGGRIDv8`` class with DGGRID 8.42 or newer (it also runs the 9.0b pre-release). The following example uses
+the classical DGGS types of DGGRID with their default orientation.
+
+.. deprecated:: 0.6.0
+   The ``DGGRIDv7`` class for DGGRID 7 is deprecated and issues a ``DeprecationWarning`` when an instance is
+   created. It will be removed in a future version. Existing code can replace ``DGGRIDv7`` with ``DGGRIDv8``;
+   the former hierarchical address types (e.g. ``Z7_STRING``) are still accepted there, see :doc:`IGEO7`.
 
 .. code:: python
 

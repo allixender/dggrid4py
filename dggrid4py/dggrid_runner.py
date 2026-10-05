@@ -2020,14 +2020,34 @@ class DGGRID(abc.ABC):
 
 
 class DGGRIDv7(DGGRID):
+    """
+    Parameter handling for DGGRID 7.
+
+    .. deprecated:: 0.6.0
+        Use :class:`DGGRIDv8` with DGGRID 8.42 or newer. The address types of this class (e.g. ``Z7_STRING``) and its
+        clipping by sequence numbers are removed in DGGRID 9. ``DGGRIDv8`` maps the former address type names with a
+        ``DeprecationWarning``. This class will be removed in a future version.
+    """
     version = 7
     output_address_types: DggsOutputAddressTypeV7T = output_address_types_v7
     output_extra_fields = output_extra_fields_v7
     input_address_types: DggsInputAddressTypeV7T = input_address_types_v7
     input_extra_fields = input_extra_fields_v7
 
+    def __init__(self, *args, **kwargs):
+        warnings.warn(
+            "DGGRIDv7 is deprecated since dggrid4py 0.6.0 and will be removed in a future version, "
+            "use DGGRIDv8 with DGGRID 8.42 or newer (it maps the former address types like 'Z7_STRING')",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        super().__init__(*args, **kwargs)
+
 
 class DGGRIDv8(DGGRID):
+    """
+    Parameter handling for DGGRID 8, for the classical DGGS types as well as for IGEO7 with the Z7 index.
+    """
     version = 8
     output_address_types: DggsOutputAddressTypeV8T = output_address_types_v8
     output_extra_fields = output_extra_fields_v8
