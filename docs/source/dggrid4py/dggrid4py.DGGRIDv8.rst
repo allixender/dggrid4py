@@ -1,9 +1,12 @@
 ﻿dggrid4py.DGGRIDv8
 ==================
 
-The DGGRIDv8 class has been introduced to provide custom parameters to the DGGRID version 8.x series.
+The DGGRIDv8 class is the class to use with DGGRID 8, for the classical DGGS types as well as for IGEO7.
+It selects the hierarchical indexes (Z3, Z7, ZORDER) through the address type ``HIERNDX`` and accepts the additional
+parameters of the DGGRID 8 series. The former address type names of the DGGRIDv7 class (e.g. ``Z7_STRING``)
+are mapped to ``HIERNDX`` with a ``DeprecationWarning``, see :doc:`../IGEO7`.
 
-For "default" or "classical" behavior of dggrid4py parameter handling, the DGGRIDv7 class should be used.
+The DGGRIDv7 class for DGGRID 7 is deprecated since version 0.6.0.
 
 How to pass additional parameters to DGGRIDv8:
 
@@ -12,6 +15,8 @@ How to pass additional parameters to DGGRIDv8:
 .. currentmodule:: dggrid4py
 
 .. autoclass:: DGGRIDv8
+   :members:
+   :inherited-members:
 
    
    .. automethod:: __init__

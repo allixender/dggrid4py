@@ -16,7 +16,7 @@ jobs:
       DGGRID_REPO: https://github.com/sahrk/DGGRID.git
       DGGRID_SOURCE_DIR: dggrid_src
       DGGRID_INSTALL_DIR: ${{ github.workspace }}/DGGRID/bin
-      DGGRID_VERSION: v8.42
+      DGGRID_VERSION: v8.44
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

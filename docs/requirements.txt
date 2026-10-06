@@ -6,5 +6,5 @@ pandas
 shapely
 geopandas
 pyogrio
-dggrid4py
+pygeodesy
 

@@ -9,9 +9,9 @@ GNU AFFERO GENERAL PUBLIC LICENSE
 
 `DGGRID <https://www.discreteglobalgrids.org/software/>`__ is a free
 software program for creating and manipulating Discrete Global Grids
-created and maintained by Kevin Sahr. DGGRID version 8.42 was released 21. September 2025
+created and maintained by Kevin Sahr. DGGRID version 8.44 was released 1. December 2025.
 
--  `DGGRID Version 8.42 on GitHub <https://github.com/sahrk/DGGRID>`__
+-  `DGGRID on GitHub <https://github.com/sahrk/DGGRID>`__
 -  `DGGRID User
    Manual <https://github.com/sahrk/DGGRID/blob/d08e10d761f7bedd72a253ab1057458f339de51e/dggridManualV81b.pdf>`__
 
@@ -31,7 +31,7 @@ Find the source repository on `GitHub <https://github.com/allixender/dggrid4py>`
 Related work:
 -------------
 
-Originally insprired by
+Originally inspired by
 `dggridR <https://github.com/r-barnes/dggridR>`__, Richard Barnes’ R
 interface to DGGRID. However, dggridR is directly linked via Rcpp to
 DGGRID and calls native C/C++ functions.
@@ -51,7 +51,8 @@ Bundling for different operating systems
 ----------------------------------------
 
 Having to compile DGGRID for Windows can be a bit challenging. We are
-working on an updated conda package. Currently DGGRID v8.42 is available on conda-forge:
+working on an updated conda package. Currently DGGRID v8.44 is available on conda-forge, and portable
+binaries without GDAL can be downloaded with dggrid4py (see :doc:`usage`):
 
 .. image:: https://anaconda.org/conda-forge/dggrid/badges/version.svg
    :target: https://anaconda.org/conda-forge/dggrid
