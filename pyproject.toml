@@ -1,6 +1,6 @@
 [project]
 name = "dggrid4py"
-version = "0.6.0.dev1"
+version = "0.6.0"
 description = "a Python library to run highlevel functions of DGGRIDv7 and v8"
 authors = [
   { name = "Alexander Kmoch", email = "alexander.kmoch@ut.ee" },
