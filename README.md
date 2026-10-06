@@ -6,7 +6,7 @@
 
 GNU AFFERO GENERAL PUBLIC LICENSE
 
-[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.44 was released 1. December 2025.
+[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.44 was released 2. April 2026 (version 9.03b on 5. October 2026).
 
 - [DGGRID on GitHub](https://github.com/sahrk/DGGRID)
 - [DGGRID User Manual (readthedocs)](https://dggrid.readthedocs.io/latest/)
