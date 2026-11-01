@@ -433,3 +433,27 @@ def test_no_temp_files_left_behind():
     dggrid.cells_for_geo_points(points, True, "ISEA7H", 5)
     dggrid.address_transform([1, 4], "ISEA7H", 3, output_address_type="Q2DI")
     assert sorted(os.listdir(dggrid.working_dir)) == []
+
+
+@pytest.mark.parametrize("silent", [True, False])
+@pytest.mark.parametrize("capture_logs", [True, False])
+def test_run_output_handling(silent, capture_logs, capsys):
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir=tempfile.mkdtemp(), capture_logs=capture_logs, silent=silent)
+    assert dggrid.run(["dggrid_operation OUTPUT_STATS", "dggs_type ISEA7H", "dggs_res_spec 2"]) == 0
+    assert dggrid.last_run_successful
+    assert ("Earth Radius" in dggrid.last_run_logs) == capture_logs
+    assert ("Earth Radius" in capsys.readouterr().out) == (not silent)
+
+
+@pytest.mark.parametrize("silent", [True, False])
+def test_run_failure_returncode_and_logs(silent):
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir=tempfile.mkdtemp(), capture_logs=True, silent=silent)
+    assert dggrid.run(["dggrid_operation NOT_AN_OPERATION"]) != 0
+    assert not dggrid.last_run_successful
+    assert dggrid.last_run_logs
+
+
+def test_run_missing_executable_returns_minus_one():
+    dggrid = DGGRIDv8(executable="/does/not/exist/dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    assert dggrid.run(["dggrid_operation OUTPUT_STATS"]) == -1
+    assert not dggrid.last_run_successful

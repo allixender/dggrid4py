@@ -896,14 +896,20 @@ class DGGRID(abc.ABC):
 
             logs = []
             # relative paths in the metafile are relative to working_dir, the working directory of the process stays
-            with subprocess.Popen([str(working_dir / self.executable), metafile.name], cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
-                for b_line in o.stdout:
-                    line = b_line.decode().strip()
-                    # sys.stdout.write(line)
-                    if not self.silent:
+            command = [str(working_dir / self.executable), metafile.name]
+            if self.silent:
+                # nothing to show while DGGRID runs, so no need to read the output line by line
+                stdout = subprocess.PIPE if self.capture_logs else subprocess.DEVNULL
+                o = subprocess.run(command, cwd=working_dir, stdout=stdout, stderr=subprocess.STDOUT)
+                if self.capture_logs:
+                    logs = [line.strip() for line in o.stdout.decode(errors='replace').splitlines()]
+            else:
+                with subprocess.Popen(command, cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
+                    for b_line in o.stdout:
+                        line = b_line.decode(errors='replace').strip()
                         print(line)
-                    if self.capture_logs:
-                        logs.append(line.strip())
+                        if self.capture_logs:
+                            logs.append(line)
 
             if o.returncode == 0:
                 self.last_run_successful = True
