@@ -21,6 +21,8 @@ dggrid4py from PyPI, so you don't need to compile anything.
    $ pixi add --pypi dggrid4py
 
 ``dggrid4py`` pulls in ``pygeodesy`` from PyPI (it is not available on conda-forge).
+This installs the current DGGRID version from conda-forge, which is DGGRID 9.1 at the moment; IGEO7 with DGGRID 9.1
+needs dggrid4py 0.6.1 or newer (see :ref:`igeo7_dggrid91`).
 Check that the ``dggrid`` executable is available in the environment:
 
 .. code-block:: console
@@ -149,7 +151,7 @@ functions are integrated to work with the more comfortable geopython libraries, 
 -  grid_stats_table(): number of cells, cell area and spacing per resolution.
 
 The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. Use the
-``DGGRIDv8`` class with DGGRID 8.42 or newer (it also runs the 9.0b pre-release). The following example uses
+``DGGRIDv8`` class with DGGRID 8.42 or newer, including DGGRID 9.1 (see :ref:`igeo7_dggrid91`). The following example uses
 the classical DGGS types of DGGRID with their default orientation.
 
 .. deprecated:: 0.6.0

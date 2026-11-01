@@ -47,7 +47,26 @@ Both adjustments are part of the grid definition and not an option, because each
      - ``00641543636``
      - ``00010261152``
 
-In practice this means that IGEO7 as described in the original publication (the last row) is not the same grid as the ellipsoid-adjusted IGEO7 (the first row), although both can be generated with dggrid4py. We hope that the required changes become available in DGGRID itself, so that no further confusion can arise. Until then, implementers should state explicitly which orientation and which latitude conversion they use, and the cells in the first row can serve as a check.
+In practice this means that IGEO7 as described in the original publication (the last row) is not the same grid as the ellipsoid-adjusted IGEO7 (the first row), although both can be generated with dggrid4py. Implementers should state explicitly which orientation and which latitude conversion they use, and the cells in the first row can serve as a check.
+
+
+.. _igeo7_dggrid91:
+
+IGEO7 in DGGRID 9.1
+-------------------
+
+Both adjustments are available in DGGRID itself since version 9.1, which changes the meaning of the DGGS type names:
+
+- ``IGEO7v2`` applies ``dggs_vert0_lon = 11.20`` and takes WGS84 coordinates in input and output, which is the IGEO7 of the first row in the table above; ``IGEO7`` is now an alias for this type and DGGRID logs a warning for it;
+- ``IGEO7v1`` is the former ``IGEO7`` type (``dggs_vert0_lon = 11.25``, authalic sphere), which is the last row in the table above.
+
+Since version 0.6.1, the ``DGGRIDv8`` class keeps its meaning of ``IGEO7`` on all DGGRID versions and runs it as ``IGEO7v1`` with DGGRID 9.1 or newer, so that the wrappers and the explicit configuration below return the same cell identifiers as before. A ``DGGRIDv9`` class for the new DGGS types is in preparation.
+
+.. warning::
+
+   dggrid4py 0.6.0 does not handle this. With DGGRID 9.1, the latitudes are converted twice and wrong cell identifiers are returned without an error (e.g. ``00641564000`` instead of ``00641565463`` for Lisbon). DGGRID 9.1 is the current version on conda-forge, so an unpinned installation is affected. Data that was generated with this combination should be generated again.
+
+The cell identifiers are stable between the two DGGRID versions, with two limitations. We compared 20,008 locations with DGGRID 8.44 and 9.1: all identifiers were the same up to resolution 12, while 1 differed at resolution 15 and 34 at resolution 18, which most likely concerns locations very close to a cell edge. In addition, DGGRID 9.1 corrects the cell boundaries across icosahedron face edges at odd resolutions, so that polygons of some cells change with the same identifier (at resolution 5, 980 of 168,072 cells by up to 0.018 degrees, at resolution 1, 20 of 72 cells by up to 0.74 degrees). The results of ``clip_subset_type='COARSE_CELLS'`` can also differ in a few neighbouring cells.
 
 
 Recommended: the wrappers in ``dggrid4py.igeo7_ext``
@@ -59,7 +78,7 @@ The wrappers in :mod:`dggrid4py.igeo7_ext` apply the IGEO7 definition from above
 - they use the Z7 hierarchical index and ``dggs_vert0_lon = 11.20``, see ``igeo7_meta_config()``;
 - WGS84 inputs (clip geometries, points) are converted to the authalic sphere before they go to DGGRID, and output geometries are converted back to WGS84.
 
-The example below needs DGGRID 8.42 or newer, e.g. version 8.44 from conda-forge, which is installed with the pixi quickstart in :ref:`installation`. It was tested with DGGRID 8.42, 8.44 and the 9.0b pre-release.
+The example below needs DGGRID 8.42 or newer, e.g. the current version from conda-forge, which is installed with the pixi quickstart in :ref:`installation`. It was tested with DGGRID 8.44 and 9.1.
 
 .. code:: python
 
