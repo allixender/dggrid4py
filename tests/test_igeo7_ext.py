@@ -22,6 +22,37 @@ def _dggrid():
     return DGGRIDv8(executable=path, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
 
 
+@pytest.mark.parametrize("resolution, lisbon, tartu", [
+    (5, "0064156", "0001022"),
+    (6, "00641565", "00010224"),
+    (9, "00641565463", "00010224545"),
+])
+def test_igeo7_wrapper_reference_cells(resolution, lisbon, tartu):
+    # the same cells on any DGGRID version, DGGRID 9.1 changed the meaning of dggs_type IGEO7
+    points = gpd.GeoDataFrame(geometry=gpd.points_from_xy([-9.1393, 26.7220], [38.7223, 58.3776]), crs=4326)
+    cells = igeo7_ext.dggrid_igeo7_cells_for_geo_points(points, resolution, _dggrid())
+    assert cells["name"].tolist() == [lisbon, tartu]
+
+
+def test_igeo7_wrapper_polygon_contains_point():
+    dggrid = _dggrid()
+    point = shapely.Point(26.7220, 58.3776)
+    cells = igeo7_ext.dggrid_igeo7_cells_for_geo_points(gpd.GeoDataFrame(geometry=[point], crs=4326), 9, dggrid)
+    polygons = igeo7_ext.dggrid_igeo7_grid_cell_polygons_from_cellids(cells["name"], dggrid)
+    assert polygons.geometry.iloc[0].contains(point)
+
+
+def test_plain_igeo7_keeps_dggrid8_grid():
+    # DGGRIDv8 without the adjustments of igeo7_ext, table in docs/source/IGEO7.rst, also on DGGRID 9.1
+    points = gpd.GeoDataFrame(geometry=gpd.points_from_xy([-9.1393, 26.7220], [38.7223, 58.3776]), crs=4326)
+    cells = _dggrid().cells_for_geo_points(
+        points, True, "IGEO7", 9,
+        output_address_type="HIERNDX", output_cell_label_type="OUTPUT_ADDRESS_TYPE",
+        output_hier_ndx_system="Z7", output_hier_ndx_form="DIGIT_STRING",
+    )
+    assert cells["name"].tolist() == ["00641543636", "00010261152"]
+
+
 def test_igeo7_meta_config_and_v8_only():
     meta = igeo7_ext.igeo7_meta_config()
     assert meta["dggs_vert0_lon"] == 11.20
