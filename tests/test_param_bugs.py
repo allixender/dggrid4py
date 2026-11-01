@@ -10,8 +10,8 @@ import shapely
 import geopandas as gpd
 
 from dggrid4py import DGGRIDv7, DGGRIDv8
-from dggrid4py.auxlat import geoseries_to_authalic
-from dggrid4py.dggrid_runner import AnyDGGRID, dg_grid_meta, dgselect, get_geo_out, specify_clip_settings
+from dggrid4py.auxlat import geodetic_to_authalic, geoseries_to_authalic
+from dggrid4py.dggrid_runner import AnyDGGRID, dg_grid_meta, dgconstruct, dgselect, get_geo_out, specify_clip_settings
 
 # IGEO7 reference cells: dggs_vert0_lon 11.20, authalic latitudes, Z7 digit strings at resolution 5, 6 and 9
 LISBON = (-9.1393, 38.7223)
@@ -349,3 +349,140 @@ def test_extent_outputs_have_name_and_crs():
         assert list(gdf.columns) == ["name", "geometry"]
         assert gdf.crs == "EPSG:4326"
     assert sorted(polygons["name"]) == sorted(centroids["name"])
+
+
+def test_dgselect_unknown_dggs_type():
+    with pytest.raises(ValueError, match="unknown dggs_type: 'ISEA5H'"):
+        dgselect("ISEA5H", res=3)
+
+
+def test_address_transform_same_address_type_keeps_input():
+    dggrid = _dggrid()
+    digits = ["00010224545", "00641565463"]
+    hexa = dggrid.address_transform(
+        digits, "IGEO7", 9,
+        input_address_type="HIERNDX", output_address_type="HIERNDX",
+        input_hier_ndx_system="Z7", input_hier_ndx_form="DIGIT_STRING",
+        output_hier_ndx_system="Z7", output_hier_ndx_form="INT64",
+        output_cell_label_type="OUTPUT_ADDRESS_TYPE",
+    )
+    assert list(hexa.columns) == ["HIERNDX_input", "HIERNDX"]
+    assert hexa["HIERNDX_input"].tolist() == digits
+    # 16 hex characters, not the input form
+    assert hexa["HIERNDX"].str.len().tolist() == [16, 16]
+
+
+def test_cells_for_geo_points_warns_if_name_column_is_replaced():
+    dggrid = _dggrid()
+    points = _points().rename(columns={"city": "name"})
+    with pytest.warns(UserWarning, match="replaces the existing column 'name'"):
+        cells = dggrid.cells_for_geo_points(points, True, "ISEA7H", 5)
+    # the caller's frame stays as it is, the copy has the cell ids
+    assert points["name"].tolist() == ["Lisbon", "Tartu"]
+    assert cells["name"].tolist() != ["Lisbon", "Tartu"]
+
+
+def test_cells_for_geo_points_no_warning_without_name_column():
+    dggrid = _dggrid()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5)
+
+
+def test_cell_ids_are_strings_also_for_seqnum():
+    dggrid = _dggrid()
+    assert isinstance(dggrid.grid_cellids_for_extent("ISEA7H", 2, output_address_type="SEQNUM").iloc[0, 0], str)
+    cells = dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5, output_address_type="SEQNUM")
+    assert all(isinstance(cell_id, str) for cell_id in cells["name"])
+
+
+def test_dgconstruct_is_deprecated_and_builds_a_dggs():
+    with pytest.warns(DeprecationWarning, match="use dgselect"):
+        dggs = dgconstruct(dggs_type="ISEA7H", aperture=7, res=5)
+    assert dggs.dggs_type == "ISEA7H"
+    assert dggs.resolution == 5
+
+
+def test_run_keeps_process_working_directory(monkeypatch):
+    dggrid = _dggrid()
+
+    def no_chdir(path):
+        raise AssertionError("run must not change the working directory of the process")
+
+    monkeypatch.setattr(os, "chdir", no_chdir)
+    stats = dggrid.grid_stats_table("ISEA7H", 2)
+    assert len(stats) == 3
+
+
+def test_run_relative_working_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "work").mkdir()
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir="work", capture_logs=True, silent=True)
+    assert dggrid.grid_stats_table("ISEA7H", 2)["Cells"].tolist()[0] == 12
+    assert list((tmp_path / "work").glob("metafile_*")) == []
+
+
+def test_no_temp_files_left_behind():
+    dggrid = _dggrid()
+    points = _points()
+    dggrid.grid_cell_polygons_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cell_centroids_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cellids_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cell_polygons_from_cellids([1, 4], "ISEA7H", 3)
+    dggrid.grid_cell_centroids_from_cellids([1, 4], "ISEA7H", 3)
+    dggrid.cells_for_geo_points(points, True, "ISEA7H", 5)
+    dggrid.address_transform([1, 4], "ISEA7H", 3, output_address_type="Q2DI")
+    assert sorted(os.listdir(dggrid.working_dir)) == []
+
+
+@pytest.mark.parametrize("silent", [True, False])
+@pytest.mark.parametrize("capture_logs", [True, False])
+def test_run_output_handling(silent, capture_logs, capsys):
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir=tempfile.mkdtemp(), capture_logs=capture_logs, silent=silent)
+    assert dggrid.run(["dggrid_operation OUTPUT_STATS", "dggs_type ISEA7H", "dggs_res_spec 2"]) == 0
+    assert dggrid.last_run_successful
+    assert ("Earth Radius" in dggrid.last_run_logs) == capture_logs
+    assert ("Earth Radius" in capsys.readouterr().out) == (not silent)
+
+
+@pytest.mark.parametrize("silent", [True, False])
+def test_run_failure_returncode_and_logs(silent):
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir=tempfile.mkdtemp(), capture_logs=True, silent=silent)
+    assert dggrid.run(["dggrid_operation NOT_AN_OPERATION"]) != 0
+    assert not dggrid.last_run_successful
+    assert dggrid.last_run_logs
+
+
+def test_run_missing_executable_returns_minus_one():
+    dggrid = DGGRIDv8(executable="/does/not/exist/dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    assert dggrid.run(["dggrid_operation OUTPUT_STATS"]) == -1
+    assert not dggrid.last_run_successful
+
+
+def test_grid_stats_table_keeps_decimals_at_high_resolution():
+    # reported as rounded on Windows, https://github.com/allixender/dggrid4py/issues/20
+    stats = _dggrid().grid_stats_table("ISEA3H", 20)
+    assert stats["Area (km^2)"].iloc[20] == pytest.approx(0.0146285, rel=1e-3)
+    assert stats["CLS (km)"].iloc[20] == pytest.approx(0.136476, rel=1e-3)
+
+
+def test_authalic_conversion_keeps_structure_of_geometry():
+    hole = [(26.70, 58.35), (26.72, 58.35), (26.72, 58.37), (26.70, 58.37)]
+    polygon = shapely.Polygon([(26.6, 58.3), (26.85, 58.3), (26.85, 58.45), (26.6, 58.45)], [hole])
+    geometries = [
+        shapely.Point(26.72, 58.37),
+        shapely.Point(26.72, 58.37, 42.0),
+        polygon,
+        shapely.MultiPolygon([polygon, polygon]),
+        shapely.LineString([(26.6, 58.3), (26.85, 58.45)]),
+    ]
+    converted = geoseries_to_authalic(gpd.GeoSeries(geometries))
+    for before, after in zip(geometries, converted):
+        assert after.geom_type == before.geom_type
+        assert shapely.get_num_coordinates(after) == shapely.get_num_coordinates(before)
+        # only the latitudes change, by around 0.1 degrees at 58 degrees north
+        assert after.bounds[0] == before.bounds[0]
+        assert 0.05 < before.bounds[1] - after.bounds[1] < 0.2
+    assert converted.iloc[1].z == 42.0
+    assert len(converted.iloc[2].interiors) == 1
+    assert converted.iloc[0].equals_exact(shapely.Point(26.72, float(geodetic_to_authalic(58.37))), 1e-12)

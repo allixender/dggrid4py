@@ -13,6 +13,11 @@ from dggrid4py import DGGRIDv8
 
 
 def _fake_dggrid(tmp_path, output, name="dggrid"):
+    if os.name == "nt":
+        # Windows can't run a shell script
+        path = tmp_path / f"{name}.cmd"
+        path.write_text(f'@echo {output}\n@echo called>> "{tmp_path}\\calls"\n')
+        return path
     path = tmp_path / name
     path.write_text(f'#!/bin/sh\necho "{output}"\necho called >> "{tmp_path}/calls"\n')
     path.chmod(path.stat().st_mode | stat.S_IXUSR)

@@ -406,6 +406,9 @@ def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
         'D' : 'DIAMOND'
     }
 
+    if dggs_type not in dggs_types:
+        raise ValueError(f"unknown dggs_type: '{dggs_type}', allowed are {list(dggs_types)}")
+
     if dggs_type in dggs_types:
         if dggs_type in ['SUPERFUND', 'PLANETRISK', 'IGEO7']:
             # keep it simple, only that spec
@@ -643,6 +646,22 @@ class Dggs:
         raise ValueError('not yet implemented')
 
 
+def _geo_file_names(stem: str, tmp_geo_out: dict) -> list[str]:
+    names = [f"{stem}.{tmp_geo_out['ext']}"]
+    if "SHAPEFILE" in tmp_geo_out['driver'].upper():
+        names += [f"{stem}.{ext}" for ext in ['dbf', 'prj', 'shx', 'cpg']]
+    return names
+
+
+def _remove_tmp_files(tmp_dir: str, *file_names: str) -> None:
+    # each file on its own, a file that is missing or can't be removed must not keep the others around
+    for file_name in file_names:
+        try:
+            (Path(tmp_dir) / file_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _read_dggrid_version(executable: str) -> tuple[int, int] | None:
     try:
         result = subprocess.run([executable, '-v'], capture_output=True, text=True, timeout=30)
@@ -811,7 +830,7 @@ class DGGRID(abc.ABC):
         if not take_1 is None:
             takes.append(take_1)
 
-        take_2 = shutil.which(os.path.join(self.working_dir, self.executable))
+        take_2 = shutil.which(Path(self.working_dir) / self.executable)
         if not take_2 is None:
             takes.append(take_2)
 
@@ -859,39 +878,45 @@ class DGGRID(abc.ABC):
     def run(self, dggs_meta_ops):
 
         dggs_meta_ops = self._metafile_for_executable(dggs_meta_ops)
-        curdir = os.getcwd()
         tmp_id = uuid.uuid4()
+        working_dir = Path(self.working_dir).resolve()
+        metafile = working_dir / f"metafile_{tmp_id}"
 
         # subprocess.call / Popen swat_exec, check if return val is 0 or not
         # yield logs?
         o = None
         try:
-            os.chdir(self.working_dir)
-
-            with open('metafile_' + str(tmp_id), 'w', encoding='utf-8') as metafile:
+            with open(metafile, 'w', encoding='utf-8') as f:
                 for line in dggs_meta_ops:
-                    metafile.write(line + '\n')
+                    f.write(line + '\n')
 
             self.last_ops_meta = dggs_meta_ops
             if self.debug:
                 print(dggs_meta_ops)
 
             logs = []
-            with subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
-                for b_line in o.stdout:
-                    line = b_line.decode().strip()
-                    # sys.stdout.write(line)
-                    if not self.silent:
+            # relative paths in the metafile are relative to working_dir, the working directory of the process stays
+            command = [str(working_dir / self.executable), metafile.name]
+            if self.silent:
+                # nothing to show while DGGRID runs, so no need to read the output line by line
+                stdout = subprocess.PIPE if self.capture_logs else subprocess.DEVNULL
+                o = subprocess.run(command, cwd=working_dir, stdout=stdout, stderr=subprocess.STDOUT)
+                if self.capture_logs:
+                    logs = [line.strip() for line in o.stdout.decode(errors='replace').splitlines()]
+            else:
+                with subprocess.Popen(command, cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
+                    for b_line in o.stdout:
+                        line = b_line.decode(errors='replace').strip()
                         print(line)
-                    if self.capture_logs:
-                        logs.append(line.strip())
+                        if self.capture_logs:
+                            logs.append(line)
 
             if o.returncode == 0:
                 self.last_run_successful = True
                 if not self.debug:
                     try:
-                        os.remove( 'metafile_' + str(tmp_id) )
-                    except Exception:
+                        metafile.unlink()
+                    except OSError:
                         pass
             else:
                 self.last_run_successful = False
@@ -906,8 +931,6 @@ class DGGRID(abc.ABC):
             print(repr(e))
             traceback.print_exc(file=sys.stdout)
             self.last_run_logs = repr(e)
-        finally:
-            os.chdir(curdir)
 
         if not o:
             return -1
@@ -1428,7 +1451,7 @@ class DGGRID(abc.ABC):
 
         df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
 
-        df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
+        df = df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"})
         df['Resolution'] = df['Resolution'].astype(int)
         df['Cells'] = df['Cells'].astype(np.int64)
 
@@ -1495,24 +1518,7 @@ class DGGRID(abc.ABC):
         gdf = self.read_geo_out(path)
 
         if not self.debug:
-            try:
-                os.remove(path)
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "points.gen")
 
         if split_dateline:
             return self.post_process_split_dateline(gdf)
@@ -1578,24 +1584,7 @@ class DGGRID(abc.ABC):
         gdf = self.read_geo_out(Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}")
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"cells.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "cells.gen")
 
         return gdf
 
@@ -1684,24 +1673,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), f"temp_clip_{tmp_id}.txt", "points.gen")
 
         if split_dateline:
             return self.post_process_split_dateline(gdf)
@@ -1790,18 +1762,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"cells.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), f"temp_clip_{tmp_id}.txt", "cells.gen")
 
         return gdf
 
@@ -1816,7 +1777,7 @@ class DGGRID(abc.ABC):
         **conf_extra: DggridMetaConfigParameterT,
     ) -> pd.DataFrame:
         """
-        generates a DGGS grid and returns all the cellids as a pandas dataframe
+        generates a DGGS grid and returns all the cellids as a pandas dataframe, the cell ids are strings (also SEQNUM)
             a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
 
@@ -1856,23 +1817,12 @@ class DGGRID(abc.ABC):
         if self.debug:
             print(dggs_ops)
 
-        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
-        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype=datatype)
+        # all cell ids stay strings, also SEQNUM: an INT64 or DIGIT_STRING id has leading zeros
+        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype={0: str})
         df = df.dropna()
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt", *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "points.gen")
 
         return df
 
@@ -1890,7 +1840,8 @@ class DGGRID(abc.ABC):
     ) -> gpd.GeoDataFrame:
         """
         takes a GeoDataFrame with point geometry and optional additional value columns and returns:
-            a) if cell_ids_only == True: a copy of the GeoDataFrame with the columns 'lon', 'lat' and the cell ids in 'name'
+            a) if cell_ids_only == True: a copy of the GeoDataFrame with the columns 'lon', 'lat' and the cell ids in 'name',
+               as strings (also SEQNUM). An existing column 'name' is replaced, with a warning
             b) if cell_ids_only == False: a new GeoDataFrame with geometry type Polygon, the cell ids in 'zone', and the additional columns
 
         The input GeoDataFrame is not modified. DGGRID takes the coordinates as lon/lat on its sphere, without a datum
@@ -1940,21 +1891,22 @@ class DGGRID(abc.ABC):
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, **output_conf)
         if self.debug:
             print(dggs_ops)
-        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
-        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype=datatype)
+        # all cell ids stay strings, also SEQNUM: an INT64 or DIGIT_STRING id has leading zeros
+        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0: str})
         df = df.dropna()
         cell_id_list = df[0].values
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt") )
-                # probably not needed anymore
-                os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"geo_{tmp_id}.txt", f"{output_address_type}_{tmp_id}.txt")
 
         if cell_ids_only:
+            if 'name' in geodf_points_wgs84.columns:
+                warnings.warn(
+                    "cells_for_geo_points replaces the existing column 'name' with the cell ids in the returned copy, "
+                    "rename the column to keep it",
+                    UserWarning,
+                    stacklevel=2,
+                )
             geodf_points_wgs84['name'] = cell_id_list
             return geodf_points_wgs84
         else:
@@ -2006,7 +1958,8 @@ class DGGRID(abc.ABC):
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
             cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER)
-            the columns of the returned DataFrame are named after the given input and output address types
+            the columns of the returned DataFrame are named after the given input and output address types. If both
+            are the same (e.g. HIERNDX from INT64 to DIGIT_STRING), the input cell ids are in the column '<type>_input'
         """
         # column names as given by the caller, also if a DGGRIDv7 name is mapped to HIERNDX
         input_column, output_column = input_address_type, output_address_type
@@ -2046,15 +1999,14 @@ class DGGRID(abc.ABC):
 
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0:'str', 1:'str'})
         df = df.dropna()
-        seq_df[output_address_type] = df.iloc[:,0]
-        seq_df = seq_df.rename(columns={input_address_type: input_column, output_address_type: output_column})
+        if input_column == output_column:
+            # e.g. HIERNDX in another form, the input ids would be overwritten otherwise
+            input_column = f"{input_column}_input"
+        seq_df = seq_df.rename(columns={input_address_type: input_column})
+        seq_df[output_column] = df.iloc[:,0]
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"temp_in_{input_address_type}_{tmp_id}.txt", f"temp_out_{output_address_type}_{tmp_id}.txt")
 
         return seq_df
 
@@ -2405,6 +2357,15 @@ def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
                 pole_lat_deg: float         = 58.28252559, # dggs_vert0_lat
                 pole_lon_deg: float         = 11.25 # dggs_vert0_lon
                 ):
+    """
+    .. deprecated:: 0.6.2
+        Use :func:`dgselect`. This function failed on every call up to version 0.6.1, and only ``res`` can be used.
+    """
+    warnings.warn(
+        "dgconstruct is deprecated since dggrid4py 0.6.2 and will be removed in a future version, use dgselect",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     if not len(list(filter(lambda x: not x is None, [res,area,spacing,cls_val])))  == 1:
         raise ValueError('dgconstruct(): Only one of res, area, length, or cls can have a value!')
@@ -2416,14 +2377,14 @@ def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
         pole_lat_deg = pole_lat_deg,
         azimuth_deg  = azimuth_deg,
         aperture     = aperture,
-        res          = 1,
+        resolution   = 1,
         topology     = topology.upper(),
         projection   = projection.upper(),
         precision    = precision
     )
 
     if not res is None:
-        dggs.res = res
+        dggs.resolution = res
     elif not area is None:
         dggs.res = dggs.dg_closest_res_to_area (area=area, resround=resround,metric=metric,show_info=True)
     elif not spacing is None :

@@ -182,35 +182,34 @@ def test_dgapi_pres_binning_params():
     """).splitlines()
     expect_data = [f"{line}\n" for line in expect_data]
 
-    with tempfile.NamedTemporaryFile(suffix=".txt", mode="w") as tmp_shp:
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            in_file = tmp_shp.name
-            tmp_shp.writelines(input_data)
-            tmp_shp.flush()
-            tmp_shp.seek(0)
-            tmp_out = os.path.join(tmp_dir, "out.txt")
-            result = dggrid.dgapi_pres_binning(
-                dggs,
-                {
-                    "input_file_name": in_file,
-                    "input_address_type": "GEO",  # required format
-                },
-                **{
-                    "cell_output_control": "OUTPUT_OCCUPIED",
-                    "output_delimiter": ",",  # test that it gets auto-quoted
-                    "output_num_classes": True,
-                    "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
-                    "output_address_type": "HIERNDX",
-                    "output_hier_ndx_system": "Z7",
-                    "output_hier_ndx_form": "DIGIT_STRING",
-                    "output_file_name": tmp_out,
-                }
-            )
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        # closed before DGGRID runs, Windows can't open a file twice
+        in_file = os.path.join(tmp_dir, "in.txt")
+        with open(in_file, "w") as tmp_in:
+            tmp_in.writelines(input_data)
+        tmp_out = os.path.join(tmp_dir, "out.txt")
+        result = dggrid.dgapi_pres_binning(
+            dggs,
+            {
+                "input_file_name": in_file,
+                "input_address_type": "GEO",  # required format
+            },
+            **{
+                "cell_output_control": "OUTPUT_OCCUPIED",
+                "output_delimiter": ",",  # test that it gets auto-quoted
+                "output_num_classes": True,
+                "output_cell_label_type": "OUTPUT_ADDRESS_TYPE",
+                "output_address_type": "HIERNDX",
+                "output_hier_ndx_system": "Z7",
+                "output_hier_ndx_form": "DIGIT_STRING",
+                "output_file_name": tmp_out,
+            }
+        )
 
-            out_file = result["output_conf"]["output_file_name"]
-            with open(out_file, "r") as f:
-                output_data = f.readlines()
-            assert output_data == expect_data
+        out_file = result["output_conf"]["output_file_name"]
+        with open(out_file, "r") as f:
+            output_data = f.readlines()
+        assert output_data == expect_data
 
     assert set(result["metafile"]) == {
         "dggrid_operation BIN_POINT_PRESENCE",

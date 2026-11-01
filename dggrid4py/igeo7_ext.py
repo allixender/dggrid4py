@@ -18,10 +18,9 @@ import pandas as pd
 
 import geopandas as gpd
 from shapely.geometry import Point, Polygon
-from shapely.ops import transform
 
 from dggrid4py import igeo7
-from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic
+from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic, transform_xy
 from dggrid4py.dggrid_runner import DGGRIDv8
 
 IGEO7_VERT0_LON = 11.20
@@ -280,7 +279,7 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
 
     local_proj_str = f"+proj=laea +lat_0={the_one.y} +lon_0={the_one.x}"
     local_projection = pyproj.Transformer.from_crs('EPSG:4326', local_proj_str, always_xy=True).transform
-    lamb_geom = transform(local_projection, the_one)
+    lamb_geom = transform_xy(local_projection, the_one)
 
     neighbour_field_local = lamb_geom.buffer(cls_m)
     neighbour_field_local_clip = None
@@ -288,9 +287,9 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
         neighbour_field_local_clip = neighbour_field_local.buffer(cls_m / 6)
 
     inverse = pyproj.Transformer.from_crs(local_proj_str, 'EPSG:4326', always_xy=True).transform
-    neighbour_field = transform(inverse, neighbour_field_local)
+    neighbour_field = transform_xy(inverse, neighbour_field_local)
     if stricter_clip:
-        neighbour_field_clip = transform(inverse, neighbour_field_local_clip)
+        neighbour_field_clip = transform_xy(inverse, neighbour_field_local_clip)
 
     # neighbour_field is already on the authalic sphere, pass it to DGGRID as is
     k_ring_group = dggrid_instance.grid_cell_centroids_for_extent('IGEO7',

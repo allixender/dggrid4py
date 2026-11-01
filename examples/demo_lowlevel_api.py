@@ -9,6 +9,10 @@
 #
 
 from pathlib import Path
+import shutil
+import sys
+import tempfile
+
 import pandas as pd
 
 from dggrid4py import DGGRIDv8, dgselect, dggs_types
@@ -243,11 +247,11 @@ def example_transform_reverse_seqnum_to_any(dggrid_instance, out_type):
 if __name__ == '__main__':
 
     # DGGRID from https://github.com/sahrk/DGGRID
-    # DGGRID src examples path
-    example_src = Path('./examples')
+    # DGGRID src examples path as first argument, e.g. python demo_lowlevel_api.py <path_to>/DGGRID/examples
+    example_src = Path(sys.argv[1] if len(sys.argv) > 1 else './examples')
 
-    # with a /tmp dir, e.g. on Linux/Mac
-    dggrid = DGGRIDv8(executable='/usr/local/bin/dggrid', working_dir='/tmp', capture_logs=True, silent=False)
+    # dggrid from the PATH, e.g. in a pixi environment, and a new temp dir
+    dggrid = DGGRIDv8(executable=shutil.which('dggrid'), working_dir=tempfile.mkdtemp(), capture_logs=True, silent=False)
 
     print( dggrid.is_runnable() == True )
 
