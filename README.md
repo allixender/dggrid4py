@@ -46,7 +46,7 @@ Besides some low-level access to influence the metafile creation of the DGGRID o
 - address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
 - grid_stats_table(): number of cells, cell area and spacing per resolution.
 
-Use the `DGGRIDv8` class with DGGRID 8.42 or newer, including DGGRID 9.1. IGEO7 with DGGRID 9.1, the current version on conda-forge, needs dggrid4py 0.6.1 or newer: dggrid4py 0.6.0 returns wrong cell identifiers there without an error, see [IGEO7 in DGGRID 9.1](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html#igeo7-in-dggrid-9-1). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in a future version.
+Use the `DGGRIDv8` class with DGGRID 8.42 or newer, including DGGRID 9.1, and the `DGGRIDv9` class for the new DGGS types and parameters of DGGRID 9.1 (e.g. `IGEO7v2`, `ISEA7HL` or `IVEA7HS`). IGEO7 with DGGRID 9.1, the current version on conda-forge, needs dggrid4py 0.6.1 or newer: dggrid4py 0.6.0 returns wrong cell identifiers there without an error, see [IGEO7 in DGGRID 9.1](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html#igeo7-in-dggrid-9-1). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in version 0.8.0.
 
 ```python
 import shutil
@@ -131,6 +131,16 @@ sites = igeo7_ext.dggrid_igeo7_cells_for_geo_points(sites, 9, dggrid_instance)
 print(sites['name'].tolist())   # ['00641565463', '00010224545']
 ```
 
+With DGGRID 9.1, the `DGGRIDv9` class needs neither the wrappers nor a conversion, because IGEO7 is defined on the WGS84 ellipsoid in DGGRID itself:
+
+```python
+from dggrid4py import DGGRIDv9
+
+dggrid_v9 = DGGRIDv9(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+sites = dggrid_v9.cells_for_geo_points(sites, True, 'IGEO7', 9, output_hier_ndx_form='DIGIT_STRING')
+print(sites['name'].tolist())   # ['00641565463', '00010224545']
+```
+
 The former address type `Z7_STRING` of the `DGGRIDv7` class is deprecated in DGGRID 8.44 and removed in DGGRID 9. The `DGGRIDv8` class still accepts it with a `DeprecationWarning`. The [IGEO7 docs](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html) describe the background on orientation and ellipsoid, the explicit configuration and the migration.
 
 ### Portable DGGRID binary
@@ -152,7 +162,7 @@ dggrid_instance_portable = DGGRIDv8(executable=dggrid_exec, working_dir=tempfile
 dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")
 ```
 
-The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 8.44). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv8` class.
+The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 8.44). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv8` class, or the `DGGRIDv9` class for the `edge` line.
 
 ## TODO:
 

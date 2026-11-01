@@ -122,7 +122,8 @@ should be considered:
   then exchanges Shapefiles with DGGRID, and the returned GeoDataFrames have the same columns and cell identifiers
   as with a GDAL build;
 - DGGRID 9 removes the address types ``Z7``, ``Z7_STRING`` and their Z3 and ZORDER counterparts, as well as the
-  ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` class;
+  ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` or
+  the ``DGGRIDv9`` class;
 - on macOS, a binary that was downloaded with a web browser has to be cleared once with
   ``xattr -d com.apple.quarantine dggrid``, because the binaries are not notarised; this is not needed for the
   download with ``get_portable_executable``;
@@ -148,13 +149,33 @@ functions are integrated to work with the more comfortable geopython libraries, 
 -  address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
 -  grid_stats_table(): number of cells, cell area and spacing per resolution.
 
-The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. Use the
-``DGGRIDv8`` class with DGGRID 8.42 or newer, including DGGRID 9.1 (see :ref:`igeo7_dggrid91`). The following example uses
-the classical DGGS types of DGGRID with their default orientation.
+The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. The class depends
+on the DGGRID version and on the DGGS types that are needed:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 18 22 60
+
+   * - Class
+     - DGGRID version
+     - Purpose
+   * - ``DGGRIDv9``
+     - 9.1 or newer
+     - the DGGS types and parameters of DGGRID 9.1, e.g. ``IGEO7v2``, ``ISEA7HL`` or ``IVEA7HS`` (see :doc:`dggrid4py/dggrid4py.DGGRIDv9`)
+   * - ``DGGRIDv8``
+     - 8.42 or newer, including 9.1
+     - the classical DGGS types and IGEO7, with the same grids on DGGRID 8 and 9.1 (see :ref:`igeo7_dggrid91`)
+   * - ``DGGRIDv7``
+     - 7, deprecated
+     - existing code only, it will be removed in version 0.8.0
+
+The following example uses the ``DGGRIDv8`` class and the classical DGGS types of DGGRID with their default
+orientation. It also runs with ``DGGRIDv9``, where the coordinate reference system of these types is DGGRID's
+authalic sphere and not ``EPSG:4326``.
 
 .. deprecated:: 0.6.0
    The ``DGGRIDv7`` class for DGGRID 7 is deprecated and issues a ``DeprecationWarning`` when an instance is
-   created. It will be removed in a future version. Existing code can replace ``DGGRIDv7`` with ``DGGRIDv8``;
+   created. It will be removed in version 0.8.0. Existing code can replace ``DGGRIDv7`` with ``DGGRIDv8``;
    the former hierarchical address types (e.g. ``Z7_STRING``) are still accepted there, see :doc:`IGEO7`.
 
 .. code:: python
@@ -221,8 +242,8 @@ the classical DGGS types of DGGRID with their default orientation.
    gdf8 = dggrid_instance.grid_cell_polygons_from_cellids([100], 'ISEA7H', 6, clip_subset_type='COARSE_CELLS', clip_cell_res=5)
    print(len(gdf8))
 
-All functions that return geometries return a GeoDataFrame with the cell identifier in the column ``name`` and
-with ``EPSG:4326`` as coordinate reference system. For the classical DGGS types, DGGRID takes and returns longitude
+All functions that return geometries return a GeoDataFrame with the cell identifier in the column ``name`` and,
+with ``DGGRIDv8``, with ``EPSG:4326`` as coordinate reference system. For the classical DGGS types, DGGRID takes and returns longitude
 and latitude in degrees on its sphere, and dggrid4py passes the coordinates through without a datum conversion.
 ``cells_for_geo_points`` does not modify the GeoDataFrame it is given. It returns a copy with the columns ``lon``,
 ``lat`` and ``name`` (the cell identifier), or with ``cell_ids_only=False`` one cell polygon per point, with the
@@ -231,7 +252,9 @@ cell identifier in the column ``zone`` and the columns of the points attached.
 Further DGGRID parameters can be passed to all functions as keyword arguments, e.g. ``dggs_vert0_lon``,
 ``dggs_vert0_lat`` and ``dggs_vert0_azimuth`` for the orientation of the icosahedron. Only the parameters that
 are given are changed, the others keep the DGGRID default. An input or output address type that the DGGRID
-class does not know raises a ``ValueError``.
+class does not know raises a ``ValueError``. ``address_transform`` returns one column for the input and one for the
+output address type; if both are the same (e.g. ``HIERNDX`` from ``INT64`` to ``DIGIT_STRING``), the input cell
+identifiers are in the column ``<type>_input``.
 
 
 .. _igeo7_usage:
@@ -252,8 +275,8 @@ ellipsoid, which requires a conversion to authalic latitudes around each DGGRID 
    extent = shapely.box(26.664593, 58.348705, 26.785607, 58.422495)
    cells = igeo7_ext.dggrid_igeo7_grid_cell_polygons_for_extent(extent, 9, dggrid_instance)
 
-The background on orientation and ellipsoid, the full examples, the explicit configuration with ``DGGRIDv8``
-and the migration from the former ``Z7_STRING`` address type are described in :doc:`IGEO7`.
+The background on orientation and ellipsoid, the full examples, the direct use with ``DGGRIDv9``, the explicit
+configuration with ``DGGRIDv8`` and the migration from the former ``Z7_STRING`` address type are described in :doc:`IGEO7`.
 
 TODO
 ----
