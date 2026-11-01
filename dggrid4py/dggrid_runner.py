@@ -2198,6 +2198,94 @@ class DGGRIDv9(DGGRID):
         # the same grid, but without the warning of DGGRID 9.1 about the alias in the logs
         return ['dggs_type IGEO7v2' if line == 'dggs_type IGEO7' else line for line in dggs_meta_ops]
 
+    def _cell_relations(self, cell_id_list, dggs_type, resolution, parameter, suffix, column, mixed_aperture_level,
+                        input_address_type, output_address_type, conf_extra):
+        if cell_id_list is None or len(cell_id_list) <= 0:
+            raise ValueError("Expecting cell_id_list.")
+        cell_ids = [str(cell_id) for cell_id in np.asarray(cell_id_list).tolist()]
+        preset = self._preset_address_type(dggs_type)
+        input_address_type = self.resolve_address_type('input', input_address_type or preset, conf_extra)
+        output_address_type = self.resolve_address_type('output', output_address_type or preset, conf_extra)
+        if output_address_type == 'HIERNDX':
+            conf_extra.setdefault('output_cell_label_type', 'OUTPUT_ADDRESS_TYPE')
+
+        tmp_id = uuid.uuid4()
+        tmp_dir = self.working_dir
+        relations_stem = f"relations_{tmp_id}"
+        conf_extra[f"{parameter}_output_type"] = 'TEXT'
+        conf_extra[f"{parameter}_output_file_name"] = str((Path(tmp_dir) / relations_stem).resolve())
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
+
+        subset_conf, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, input_address_type=input_address_type,
+                                               cell_id_list=cell_ids, resolution=resolution,
+                                               address_clip_subset_type=self.address_clip_subset_type)
+        subset_conf.update(self.check_input_extra_fields(conf_extra))
+        output_conf = {
+            'cell_output_type': 'NONE',
+            'point_output_type': 'NONE',
+            'output_address_type': output_address_type,
+            **self.check_output_extra_fields(conf_extra),
+        }
+        self.dgapi_grid_gen(dggs, subset_conf, output_conf)
+
+        # one line per cell, in the order of DGGRID: the cell id, followed by the related cell ids
+        relations_file = Path(tmp_dir) / f"{relations_stem}.{suffix}"
+        relations = {}
+        for line in relations_file.read_text().splitlines():
+            ids = line.split()
+            relations[ids[0]] = ids[1:]
+        if not self.debug:
+            _remove_tmp_files(tmp_dir, relations_file.name, f"temp_clip_{tmp_id}.txt")
+
+        # in the order of the given cells, as far as the input and output form of the ids are the same
+        order = [cell_id for cell_id in dict.fromkeys(cell_ids) if cell_id in relations]
+        order += [cell_id for cell_id in relations if cell_id not in order]
+        rows = [(cell_id, related) for cell_id in order for related in relations[cell_id]]
+        return pd.DataFrame(rows, columns=['name', column], dtype=str)
+
+    def _require_hierarchical(self, dggs_type):
+        if dggs_type not in dggs_types_hierarchical_v9:
+            raise ValueError(
+                f"'{dggs_type}' has no hierarchical index, use a DGGS type with one, e.g. IGEO7 or ISEA7HLZ"
+            )
+
+    def cell_parents(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                     input_address_type=None, output_address_type=None, **conf_extra) -> pd.DataFrame:
+        """
+        Index parents of the given cells at ``resolution``, which is the resolution of the given cells.
+
+        It returns a DataFrame with the columns ``name`` (the cell id) and ``parent``. It needs a DGGS type with a
+        hierarchical index, and there is no parent at resolution 0.
+        """
+        self._require_hierarchical(dggs_type)
+        if resolution < 1:
+            raise ValueError("The cells at resolution 0 have no parent.")
+        return self._cell_relations(cell_id_list, dggs_type, resolution, 'indexing_parent', 'ndxPrt', 'parent',
+                                    mixed_aperture_level, input_address_type, output_address_type, conf_extra)
+
+    def cell_children(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                      input_address_type=None, output_address_type=None, **conf_extra) -> pd.DataFrame:
+        """
+        Index children of the given cells at ``resolution``, which is the resolution of the given cells.
+
+        It returns a DataFrame with the columns ``name`` (the cell id) and ``child``, with one row per child. In
+        contrast to ``clip_subset_type='COARSE_CELLS'``, this is a lookup in the index and not a spatial clip. It needs
+        a DGGS type with a hierarchical index.
+        """
+        self._require_hierarchical(dggs_type)
+        return self._cell_relations(cell_id_list, dggs_type, resolution, 'indexing_children', 'ndxChd', 'child',
+                                    mixed_aperture_level, input_address_type, output_address_type, conf_extra)
+
+    def cell_neighbours(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                        input_address_type=None, output_address_type=None, **conf_extra) -> pd.DataFrame:
+        """
+        Neighbours of the given cells at ``resolution``, which is the resolution of the given cells.
+
+        It returns a DataFrame with the columns ``name`` (the cell id) and ``neighbour``, with one row per neighbour.
+        """
+        return self._cell_relations(cell_id_list, dggs_type, resolution, 'neighbor', 'nbr', 'neighbour',
+                                    mixed_aperture_level, input_address_type, output_address_type, conf_extra)
+
     def _preset_address_type(self, dggs_type):
         return 'HIERNDX' if dggs_type in dggs_types_hierarchical_v9 else 'SEQNUM'
 

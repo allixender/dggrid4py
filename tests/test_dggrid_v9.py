@@ -288,3 +288,77 @@ def test_v9_real_older_binary_clear_error():
     dggrid = DGGRIDv9(executable=path, working_dir=tempfile.mkdtemp(), silent=True)
     with pytest.raises(ValueError, match="needs DGGRID 9.1 or newer"):
         dggrid.grid_stats_table("ISEA7H", 2)
+
+
+DIGIT_IDS = ["00641565463", "00010224545"]
+
+
+def test_v9_cell_parents_in_the_order_of_the_input():
+    parents = _dggrid91().cell_parents(DIGIT_IDS, "IGEO7", 9, **DIGITS)
+    assert parents.columns.tolist() == ["name", "parent"]
+    assert parents.values.tolist() == [["00641565463", "0064156546"], ["00010224545", "0001022454"]]
+
+
+def test_v9_cell_parents_resolution_0():
+    with pytest.raises(ValueError, match="no parent"):
+        _dggrid91().cell_parents(["00"], "IGEO7", 0, **DIGITS)
+
+
+def test_v9_cell_children_are_the_index_children():
+    children = _dggrid91().cell_children(DIGIT_IDS, "IGEO7", 9, **DIGITS)
+    assert children.columns.tolist() == ["name", "child"]
+    assert children["child"].tolist() == [f"{cell_id}{digit}" for cell_id in DIGIT_IDS for digit in range(7)]
+
+
+def test_v9_cell_children_of_a_pentagon():
+    children = _dggrid91().cell_children(["0000000000"], "IGEO7", 8, **DIGITS)
+    # no digit 2 at a pentagon
+    assert children["child"].tolist() == [f"0000000000{digit}" for digit in [0, 1, 3, 4, 5, 6]]
+
+
+def test_v9_cell_neighbours():
+    dggrid = _dggrid91()
+    neighbours = dggrid.cell_neighbours(DIGIT_IDS, "IGEO7", 9, **DIGITS)
+    assert neighbours.columns.tolist() == ["name", "neighbour"]
+    assert neighbours["name"].value_counts().to_dict() == {DIGIT_IDS[0]: 6, DIGIT_IDS[1]: 6}
+    assert "00641565462" in neighbours["neighbour"].tolist()
+    pentagon = dggrid.cell_neighbours(["0000000000"], "IGEO7", 8, **DIGITS)
+    assert len(pentagon) == 5
+
+
+def test_v9_relations_int64_default_form():
+    dggrid = _dggrid91()
+    ids = dggrid.cells_for_geo_points(_points(), True, "IGEO7", 5)["name"].tolist()
+    assert all(len(name) == 16 for name in ids)
+    children = dggrid.cell_children(ids, "IGEO7", 5)
+    assert len(children) == 14
+    assert all(len(child) == 16 for child in children["child"])
+    parents = dggrid.cell_parents(children["child"].tolist(), "IGEO7", 6)
+    assert set(parents["parent"]) == set(ids)
+
+
+def test_v9_neighbours_on_seqnum_preset():
+    neighbours = _dggrid91().cell_neighbours([5, 9], "ISEA7HL", 4)
+    assert neighbours["name"].unique().tolist() == ["5", "9"]
+    assert len(neighbours[neighbours["name"] == "5"]) == 6
+
+
+@pytest.mark.parametrize("func_name", ["cell_parents", "cell_children"])
+def test_v9_parent_child_need_hierarchical_preset(func_name):
+    dggrid = DGGRIDv9(executable="dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    with pytest.raises(ValueError, match="no hierarchical index"):
+        getattr(dggrid, func_name)([5], "ISEA7HL", 4)
+
+
+def test_v9_relations_leave_no_temp_files():
+    dggrid = _dggrid91()
+    dggrid.cell_children(DIGIT_IDS, "IGEO7", 9, **DIGITS)
+    dggrid.cell_neighbours(DIGIT_IDS, "IGEO7", 9, **DIGITS)
+    assert os.listdir(dggrid.working_dir) == []
+
+
+def test_v9_address_transform_to_geo():
+    geo = _dggrid91().address_transform(DIGIT_IDS, "IGEO7", 9, output_address_type="GEO", input_hier_ndx_form="DIGIT_STRING")
+    lon, lat = (float(value) for value in geo["GEO"].iloc[1].split())
+    assert lon == pytest.approx(TARTU[0], abs=0.02)
+    assert lat == pytest.approx(TARTU[1], abs=0.02)
