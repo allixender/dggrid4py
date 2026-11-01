@@ -147,7 +147,8 @@ functions are integrated to work with the more comfortable geopython libraries, 
    resolution (clip or world);
 -  cells_for_geo_points(): poly_outline for point/centre at resolution;
 -  address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
--  grid_stats_table(): number of cells, cell area and spacing per resolution.
+-  grid_stats_table(): number of cells, cell area and spacing per resolution;
+-  cell_parents(), cell_children() and cell_neighbours(): lookup of the related cells (only ``DGGRIDv9``).
 
 The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. The class depends
 on the DGGRID version and on the DGGS types that are needed:
@@ -279,14 +280,14 @@ or a ``DGGRIDv8`` instance:
 The background on orientation and ellipsoid, the full examples, the direct use with ``DGGRIDv9``, the explicit
 configuration with ``DGGRIDv8`` and the migration from the former ``Z7_STRING`` address type are described in :doc:`IGEO7`.
 
-TODO
-----
+Logging
+-------
 
-Contributions are welcome.
+dggrid4py reports failures and warnings through the Python logger ``dggrid4py``, and the output of DGGRID at the level
+``DEBUG``. The arguments ``silent`` and ``capture_logs`` of the DGGRID classes keep their meaning:
 
--  get parent_for_cell_id at coarser resolution
+.. code:: python
 
--  get children_for_cell_id at finer resolution
+   import logging
 
-With the IGEO7/Z7 index system, the parent of a cell can be derived from the cell identifier. A function that
-enumerates the index children is still missing, see :doc:`IGEO7`.
+   logging.getLogger("dggrid4py").setLevel(logging.DEBUG)
