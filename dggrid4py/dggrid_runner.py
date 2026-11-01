@@ -921,6 +921,17 @@ class DGGRID(abc.ABC):
         return self._dggrid_version
 
 
+    def _select_dggs(self, dggs_type, resolution, mixed_aperture_level, conf_extra) -> Dggs:
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
+        return dggs
+
+
+    def _stats_dggs_type(self, dggs_type):
+        # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
+        return 'ISEA7H' if dggs_type == 'IGEO7' else dggs_type
+
+
     def _metafile_for_executable(self, dggs_meta_ops):
         # Since DGGRID 9.1, dggs_type IGEO7 means IGEO7v2, with geodetic latitudes in input and output. The classes
         # for DGGRID 7 and 8 define IGEO7 without a datum conversion, which is IGEO7v1 in DGGRID 9.1. Without this,
@@ -1500,9 +1511,7 @@ class DGGRID(abc.ABC):
         """
         generates the area and cell statistics for the given DGGS from resolution 0 to the given resolution of the DGGS
         """
-        # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
-        stats_dggs_type = 'ISEA7H' if dggs_type == 'IGEO7' else dggs_type
-        dggs = dgselect(dggs_type = stats_dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs = self._select_dggs(self._stats_dggs_type(dggs_type), resolution, mixed_aperture_level, {})
 
         dggs_ops = self.dgapi_grid_stats(dggs)
         if self.debug:
@@ -1536,8 +1545,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1602,8 +1610,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1673,8 +1680,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
@@ -1762,8 +1768,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
@@ -1846,8 +1851,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1911,8 +1915,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         # work on a copy, the caller's GeoDataFrame stays as it is
         geodf_points_wgs84 = geodf_points_wgs84.copy()
@@ -1986,6 +1989,7 @@ class DGGRID(abc.ABC):
                 input_address_type=new_input_address_type,
                 output_address_type=output_address_type,
                 **dggs_conf,  # ensure any extra parameters are passed on
+                **dggs.extra_params,
                 **address_extras,
             )
             # avoid conflict between input 'name' column and generated 'name' Zone ID
@@ -2026,8 +2030,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
