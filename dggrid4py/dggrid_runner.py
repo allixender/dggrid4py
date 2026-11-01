@@ -2089,7 +2089,7 @@ class DGGRIDv7(DGGRID):
     .. deprecated:: 0.6.0
         Use :class:`DGGRIDv8` with DGGRID 8.42 or newer. The address types of this class (e.g. ``Z7_STRING``) and its
         clipping by sequence numbers are removed in DGGRID 9. ``DGGRIDv8`` maps the former address type names with a
-        ``DeprecationWarning``. This class will be removed in a future version.
+        ``DeprecationWarning``. This class will be removed in version 0.8.0.
     """
     version = 7
     output_address_types: DggsOutputAddressTypeV7T = output_address_types_v7
@@ -2099,7 +2099,7 @@ class DGGRIDv7(DGGRID):
 
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            "DGGRIDv7 is deprecated since dggrid4py 0.6.0 and will be removed in a future version, "
+            "DGGRIDv7 is deprecated since dggrid4py 0.6.0 and will be removed in version 0.8.0, "
             "use DGGRIDv8 with DGGRID 8.42 or newer (it maps the former address types like 'Z7_STRING')",
             DeprecationWarning,
             stacklevel=2,
@@ -2110,6 +2110,9 @@ class DGGRIDv7(DGGRID):
 class DGGRIDv8(DGGRID):
     """
     Parameter handling for DGGRID 8, for the classical DGGS types as well as for IGEO7 with the Z7 index.
+
+    It also runs with DGGRID 9.1 and returns the same grids as with DGGRID 8. :class:`DGGRIDv9` gives access to the new
+    DGGS types and parameters of DGGRID 9.1.
     """
     version = 8
     output_address_types: DggsOutputAddressTypeV8T = output_address_types_v8

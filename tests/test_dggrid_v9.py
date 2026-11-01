@@ -10,8 +10,8 @@ import geopandas as gpd
 import numpy as np
 import shapely
 
-from dggrid4py import DGGRIDv8
-from dggrid4py.dggrid_runner import DGGRIDv9, Dggs, dg_grid_meta, dgselect, dggs_types_v9, _read_dggrid_version
+from dggrid4py import DGGRIDv8, DGGRIDv9, dggs_types_v9
+from dggrid4py.dggrid_runner import Dggs, dg_grid_meta, dgselect, _read_dggrid_version
 
 LISBON = (-9.1393, 38.7223)
 TARTU = (26.7220, 58.3776)
@@ -278,3 +278,13 @@ def test_v9_proj_datum_runs():
     with pytest.warns(DeprecationWarning):
         dggrid.grid_cellids_for_extent("ISEA7HS", 2, proj_datum="WGS84_AUTHALIC_SPHERE")
     assert "sphere_radius_type AUTHALIC_SPHERE" in dggrid.last_ops_meta
+
+
+def test_v9_real_older_binary_clear_error():
+    path = _dggrid_path()
+    version = _read_dggrid_version(path)
+    if version is None or version >= (9, 1):
+        pytest.skip(f"needs a DGGRID older than 9.1, local DGGRID {version}")
+    dggrid = DGGRIDv9(executable=path, working_dir=tempfile.mkdtemp(), silent=True)
+    with pytest.raises(ValueError, match="needs DGGRID 9.1 or newer"):
+        dggrid.grid_stats_table("ISEA7H", 2)

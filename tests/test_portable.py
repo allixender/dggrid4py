@@ -12,7 +12,7 @@ import geopandas as gpd
 import pytest
 import shapely
 
-from dggrid4py import DGGRIDv8, igeo7_ext, tool
+from dggrid4py import DGGRIDv8, DGGRIDv9, igeo7_ext, tool
 
 clip_bound = shapely.geometry.box(27.2, 57.5, 29.3, 59.2)
 
@@ -118,3 +118,16 @@ def test_seqnum_cells(portable_dggrid, local_dggrid):
     portable = portable_dggrid.grid_cell_polygons_from_cellids([1, 4, 8], "ISEA7H", 5)
     local = local_dggrid.grid_cell_polygons_from_cellids([1, 4, 8], "ISEA7H", 5)
     assert _names(portable) == _names(local) == [1, 4, 8]
+
+
+def test_dggrid_v9_on_portable_reference_cells(portable_dggrid):
+    if (portable_dggrid.dggrid_version or (0, 0)) < (9, 1):
+        pytest.skip(f"needs DGGRID 9.1 or newer, portable DGGRID {portable_dggrid.dggrid_version}")
+    dggrid = DGGRIDv9(executable=portable_dggrid.executable, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True, has_gdal=False)
+    sites = gpd.GeoDataFrame(geometry=gpd.points_from_xy([-9.1393, 26.7220], [38.7223, 58.3776]), crs=4326)
+    cells = dggrid.cells_for_geo_points(sites, True, "IGEO7", 9, output_hier_ndx_form="DIGIT_STRING")
+    assert cells["name"].tolist() == ["00641565463", "00010224545"]
+    box = shapely.box(26.6, 58.3, 26.85, 58.45)
+    polygons = dggrid.grid_cell_polygons_for_extent("IGEO7", 6, clip_geom=box, output_hier_ndx_form="DIGIT_STRING")
+    assert polygons.crs.to_epsg() == 4326
+    assert "00010224" in set(polygons["name"])
