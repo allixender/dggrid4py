@@ -92,7 +92,9 @@ DggsClipSubsetTypeT = Literal[
     'AIGEN',
     'SEQNUMS',
     'COARSE_CELLS',
-    'INPUT_ADDRESS_TYPE'
+    'COARSE_CELL_FILES',  # since DGGRID 9
+    'INPUT_ADDRESS_TYPE',  # ADDRESS_FILES since DGGRID 9
+    'ADDRESS_FILES',
 ]
 clip_subset_types = get_args(DggsClipSubsetTypeT)
 
@@ -736,6 +738,11 @@ class DGGRID(abc.ABC):
 
     It must be instantiated by one of its specific version to validate respective fields.
     """
+    # clip_subset_type for a list of cell ids, ADDRESS_FILES since DGGRID 9
+    address_clip_subset_type = 'INPUT_ADDRESS_TYPE'
+    # DGGRID's lon/lat are always read as EPSG:4326, also if the file declares DGGRID's sphere
+    force_geo_crs_4326 = True
+
     def __init__(self, executable = 'dggrid',
                  working_dir = None,
                  capture_logs=True,
@@ -869,7 +876,7 @@ class DGGRID(abc.ABC):
                 if col in gdf.columns:
                     gdf = gdf.rename(columns={col: 'name'})
                     break
-        return gdf.set_crs(4326, allow_override=True)
+        return gdf.set_crs(4326, allow_override=True) if self.force_geo_crs_4326 else gdf
 
     def check_gdal_support(self):
         if self.has_gdal:
@@ -1037,7 +1044,7 @@ class DGGRID(abc.ABC):
             elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
                 metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                 metafile.append("clip_region_files " + subset_conf['clip_region_files'])
-            elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE'] and not subset_conf['clip_region_files'] is None:
+            elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE', 'ADDRESS_FILES'] and not subset_conf['clip_region_files'] is None:
                 if not dggs.dggs_type in ['PLANETRISK']:
                     # metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                     # metafile.append("clip_region_files " + subset_conf['clip_region_files'])
@@ -1087,7 +1094,7 @@ class DGGRID(abc.ABC):
                 output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT']
                 and output_conf['cell_output_file_name'] is not None
             ):
-                if self.version == 8 and output_conf['cell_output_type'] == 'SHAPEFILE':
+                if self.version >= 8 and output_conf['cell_output_type'] == 'SHAPEFILE':
                     output_conf.setdefault('shapefile_id_field_length', 50)
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
@@ -1686,7 +1693,8 @@ class DGGRID(abc.ABC):
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
                                                                clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
+                                                               resolution=resolution, seqnums_clip=self.version == 7,
+                                                               address_clip_subset_type=self.address_clip_subset_type, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1774,7 +1782,8 @@ class DGGRID(abc.ABC):
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
                                                                clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
+                                                               resolution=resolution, seqnums_clip=self.version == 7,
+                                                               address_clip_subset_type=self.address_clip_subset_type, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -2347,6 +2356,7 @@ def specify_clip_settings(
     cell_id_list: list = None,
     resolution: int = 9,
     seqnums_clip: bool = False,
+    address_clip_subset_type: DggsClipSubsetTypeT = 'INPUT_ADDRESS_TYPE',
     **conf_extra: DggridMetaConfigParameterT,
 ) -> DggridMetaConfigT:
 
@@ -2368,7 +2378,7 @@ def specify_clip_settings(
             # clip_subset_type SEQNUMS is the DGGRID 7 form, it is removed in DGGRID 9
             clip_metafile_settings.update({'clip_subset_type': 'SEQNUMS'})
         else:
-            clip_metafile_settings.update({'clip_subset_type': 'INPUT_ADDRESS_TYPE'})
+            clip_metafile_settings.update({'clip_subset_type': address_clip_subset_type})
             clip_metafile_settings.update({'input_address_type': input_address_type})
             if (clip_subset_type == "COARSE_CELLS"):
                 clip_metafile_settings.update({'clip_subset_type': 'COARSE_CELLS'})
