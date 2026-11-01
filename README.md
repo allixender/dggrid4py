@@ -162,7 +162,7 @@ dggrid_instance_portable = DGGRIDv8(executable=dggrid_exec, working_dir=tempfile
 dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")
 ```
 
-The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 8.44). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv8` class, or the `DGGRIDv9` class for the `edge` line.
+The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 9.1). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv9` or the `DGGRIDv8` class.
 
 ## TODO:
 

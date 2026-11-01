@@ -106,9 +106,9 @@ and returns the path of the executable. A binary that is already in the folder i
 returned if there is no network connection. The portable binaries are published in several lines, which are
 selected with the ``line`` argument:
 
-- ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 8.44;
-- ``edge`` is a rolling pre-release that follows the DGGRID development version (currently DGGRID 9.1), and it is
-  downloaded again after it was rebuilt;
+- ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 9.1;
+- ``edge`` is a rolling pre-release that follows the DGGRID development version, and it is downloaded again after
+  it was rebuilt;
 - any other value is taken as a release tag of DGGRID_portables, e.g. ``v8.44`` or ``v9.1`` for a specific DGGRID release.
 
 .. code:: python
@@ -122,8 +122,8 @@ should be considered:
   then exchanges Shapefiles with DGGRID, and the returned GeoDataFrames have the same columns and cell identifiers
   as with a GDAL build;
 - DGGRID 9 removes the address types ``Z7``, ``Z7_STRING`` and their Z3 and ZORDER counterparts, as well as the
-  ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` or
-  the ``DGGRIDv9`` class;
+  ``DGGRIDv7`` way of clipping by sequence numbers, so these binaries have to be used with the ``DGGRIDv9`` or the
+  ``DGGRIDv8`` class;
 - on macOS, a binary that was downloaded with a web browser has to be cleared once with
   ``xattr -d com.apple.quarantine dggrid``, because the binaries are not notarised; this is not needed for the
   download with ``get_portable_executable``;
