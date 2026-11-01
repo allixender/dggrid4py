@@ -20,10 +20,13 @@ The easiest way to get started is a [pixi](https://pixi.sh) environment. DGGRID 
 ```bash
 pixi init my-dggs-project -c conda-forge
 cd my-dggs-project
+printf '\n[system-requirements]\nmacos = "13.3"\n' >> pixi.toml   # only on macOS
 pixi add python=3.12 dggrid geopandas pyogrio
 pixi add --pypi dggrid4py
 pixi run dggrid   # prints "usage: dggrid metaFileName"
 ```
+
+The system requirement is needed on macOS, because DGGRID 9.1 from conda-forge depends on macOS 13.3 or newer through GDAL, while pixi assumes an older version by default. Without it, pixi installs DGGRID 8.44 without an error, and the `DGGRIDv9` class raises a `ValueError`. Newer versions of pixi warn that this table is deprecated, which can be ignored for now.
 
 Inside the environment, `dggrid` is on the `PATH`:
 
