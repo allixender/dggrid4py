@@ -29,9 +29,9 @@ Inside the environment, `dggrid` is on the `PATH`:
 
 ```python
 import shutil, tempfile
-from dggrid4py import DGGRIDv8
+from dggrid4py import DGGRIDv9
 
-dggrid_instance = DGGRIDv8(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+dggrid_instance = DGGRIDv9(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
 ```
 
 ### Basic usage
@@ -116,7 +116,7 @@ All functions that return geometries return a GeoDataFrame with the cell identif
 
 ### IGEO7 and the Z7 index
 
-IGEO7 is the ISEA7H grid with the Z7 hierarchical index. The IGEO7 used in dggrid4py is defined with `dggs_vert0_lon = 11.20` (the DGGRID default is 11.25) and on the WGS84 ellipsoid, which requires a conversion to authalic latitudes around each DGGRID call. The wrappers in `dggrid4py.igeo7_ext` apply both, so that WGS84 data goes in and WGS84 data comes out:
+IGEO7 is the ISEA7H grid with the Z7 hierarchical index. The IGEO7 used in dggrid4py is defined with `dggs_vert0_lon = 11.20` (the default of `IGEO7` in DGGRID 8 is 11.25) and on the WGS84 ellipsoid. DGGRID 9.1 defines it that way as `IGEO7v2`, while with DGGRID 8 it requires a conversion to authalic latitudes around each DGGRID call. The wrappers in `dggrid4py.igeo7_ext` handle both cases with a `DGGRIDv9` or a `DGGRIDv8` instance, so that WGS84 data goes in and WGS84 data comes out:
 
 ```python
 from dggrid4py import igeo7_ext
@@ -152,11 +152,11 @@ If DGGRID can neither be installed from conda-forge nor compiled, dggrid4py can 
 ```python
 import tempfile
 
-from dggrid4py import DGGRIDv8, tool
+from dggrid4py import DGGRIDv9, tool
 
 # downloads and unpacks the binary for the current platform into the given folder (only once)
 dggrid_exec = tool.get_portable_executable("dggrid_portable")
-dggrid_instance_portable = DGGRIDv8(executable=dggrid_exec, working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True, has_gdal=False)
+dggrid_instance_portable = DGGRIDv9(executable=dggrid_exec, working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True, has_gdal=False)
 
 # other lines: "edge" follows the DGGRID development version, or any release tag of DGGRID_portables
 dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")

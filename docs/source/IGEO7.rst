@@ -60,7 +60,7 @@ Both adjustments are available in DGGRID itself since version 9.1, which changes
 - ``IGEO7v2`` applies ``dggs_vert0_lon = 11.20`` and takes WGS84 coordinates in input and output, which is the IGEO7 of the first row in the table above; ``IGEO7`` is now an alias for this type and DGGRID logs a warning for it;
 - ``IGEO7v1`` is the former ``IGEO7`` type (``dggs_vert0_lon = 11.25``, authalic sphere), which is the last row in the table above.
 
-Since version 0.6.1, the ``DGGRIDv8`` class keeps its meaning of ``IGEO7`` on all DGGRID versions and runs it as ``IGEO7v1`` with DGGRID 9.1 or newer, so that the wrappers and the explicit configuration below return the same cell identifiers as before. Since version 0.7.0, the ``DGGRIDv9`` class uses the new DGGS types directly, see :ref:`igeo7_v9`.
+Since version 0.6.1, the ``DGGRIDv8`` class keeps its meaning of ``IGEO7`` on all DGGRID versions and runs it as ``IGEO7v1`` with DGGRID 9.1 or newer, so that the wrappers and the explicit configuration below return the same cell identifiers as before. Since version 0.7.0, the ``DGGRIDv9`` class uses the new DGGS types directly (see :ref:`igeo7_v9`), and since version 0.7.1 the wrappers below run with it and return the same cell identifiers.
 
 .. warning::
 
@@ -74,11 +74,12 @@ Recommended: the wrappers in ``dggrid4py.igeo7_ext``
 
 The wrappers in :mod:`dggrid4py.igeo7_ext` apply the IGEO7 definition from above, so that WGS84 data goes in and WGS84 data comes out:
 
-- they only accept a ``DGGRIDv8`` instance (a ``DGGRIDv7`` instance raises ``TypeError``);
-- they use the Z7 hierarchical index and ``dggs_vert0_lon = 11.20``, see ``igeo7_meta_config()``;
-- WGS84 inputs (clip geometries, points) are converted to the authalic sphere before they go to DGGRID, and output geometries are converted back to WGS84.
+- they accept a ``DGGRIDv9`` or a ``DGGRIDv8`` instance (a ``DGGRIDv7`` instance raises ``TypeError``);
+- they use the Z7 hierarchical index in the ``DIGIT_STRING`` form by default, and ``igeo7_meta_config()`` returns the parameters for the given instance;
+- with ``DGGRIDv9``, DGGRID 9.1 handles the orientation and the conversion by itself (``IGEO7v2``);
+- with ``DGGRIDv8``, the wrappers set ``dggs_vert0_lon = 11.20``, convert WGS84 inputs (clip geometries, points) to the authalic sphere before they go to DGGRID, and convert output geometries back to WGS84.
 
-The example below needs DGGRID 8.42 or newer, e.g. the current version from conda-forge, which is installed with the pixi quickstart in :ref:`installation`. It was tested with DGGRID 8.44 and 9.1.
+The example below needs DGGRID 9.1, which is the current version from conda-forge and is installed with the pixi quickstart in :ref:`installation`. With DGGRID 8.42 or newer, the same wrappers run with a ``DGGRIDv8`` instance instead. The example was tested with both classes on DGGRID 9.1, and with ``DGGRIDv8`` on DGGRID 8.44.
 
 .. code:: python
 
@@ -88,10 +89,10 @@ The example below needs DGGRID 8.42 or newer, e.g. the current version from cond
     import geopandas as gpd
     import shapely
 
-    from dggrid4py import DGGRIDv8, igeo7_ext
+    from dggrid4py import DGGRIDv9, igeo7_ext
 
     # inside a pixi/conda environment, dggrid is on the PATH; otherwise pass the path to the DGGRID executable
-    dggrid_instance = DGGRIDv8(shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+    dggrid_instance = DGGRIDv9(shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
 
     # Tartu bbox in wgs84
     extent = shapely.box(26.664593, 58.348705, 26.785607, 58.422495)
@@ -117,7 +118,7 @@ The example below needs DGGRID 8.42 or newer, e.g. the current version from cond
     cls_m = igeo7_ext.dggrid_get_res(dggrid_instance, "IGEO7", 9).loc[9, "cls_m"]
     neighbours = igeo7_ext.z7_k1_ring_neighbours(cells["name"].iloc[0], dggrid_instance, cls_m)
 
-``hier_ndx_form='INT64'`` switches all wrappers to the 64 bit Z7 form. DGGRID writes this form as a 16 character hex string (e.g. ``'0042529bffffffff'``), which :mod:`dggrid4py.igeo7` can decode (``igeo7.z7hex_to_z7string('0042529bffffffff')`` returns ``'00010224515'``). Any other DGGRID parameter can be passed as keyword argument and overrides the defaults, e.g. ``dggs_vert0_lon=11.25`` for the orientation of the DGGRID preset.
+``hier_ndx_form='INT64'`` switches all wrappers to the 64 bit Z7 form. DGGRID writes this form as a 16 character hex string (e.g. ``'0042529bffffffff'``), which :mod:`dggrid4py.igeo7` can decode (``igeo7.z7hex_to_z7string('0042529bffffffff')`` returns ``'00010224515'``). Any other DGGRID parameter can be passed as keyword argument and overrides the defaults. With ``to_geodetic=False``, the output geometries of the polygon and centroid wrappers stay on the authalic sphere of DGGRID.
 
 
 .. _igeo7_v9:
@@ -129,9 +130,7 @@ With DGGRID 9.1 or newer, the :doc:`dggrid4py/dggrid4py.DGGRIDv9` class needs ne
 
 .. code:: python
 
-    from dggrid4py import DGGRIDv9
-
-    dggrid_v9 = DGGRIDv9(shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+    dggrid_v9 = dggrid_instance
 
     # cell polygons for an extent, in and out in wgs84
     cells_v9 = dggrid_v9.grid_cell_polygons_for_extent("IGEO7", 9, clip_geom=extent, output_hier_ndx_form="DIGIT_STRING")
@@ -156,11 +155,14 @@ The former IGEO7 preset of the original publication stays available as ``IGEO7v1
 Explicit configuration with ``DGGRIDv8``
 ----------------------------------------
 
-The functions of the ``DGGRIDv8`` class can also be used directly, for example if a function has no wrapper yet. In this case the same two adjustments have to be applied by hand. ``igeo7_ext.igeo7_meta_config()`` returns the DGGRID parameters for the Z7 index and the orientation as a dictionary:
+The functions of the ``DGGRIDv8`` class can also be used directly, for example with DGGRID 8.44, or if a function has no wrapper yet. In this case the same two adjustments have to be applied by hand. ``igeo7_ext.igeo7_meta_config()`` returns the DGGRID parameters for the Z7 index and the orientation as a dictionary:
 
 .. code:: python
 
+    from dggrid4py import DGGRIDv8
     from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic
+
+    dggrid_instance = DGGRIDv8(shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
 
     meta_config = igeo7_ext.igeo7_meta_config()
     # {
@@ -276,7 +278,7 @@ The IGEO7 functionality is spread over three modules of the dggrid4py Python pac
 
 .. seealso::
 
-   - :mod:`dggrid4py.igeo7_ext` - IGEO7 wrappers around ``DGGRIDv8``, ``igeo7_meta_config()`` and neighbour functions
+   - :mod:`dggrid4py.igeo7_ext` - IGEO7 wrappers around ``DGGRIDv9`` and ``DGGRIDv8``, ``igeo7_meta_config()`` and neighbour functions
    - :mod:`dggrid4py.igeo7` - functions on the Z7 index itself (resolution, parent, conversion between the forms)
    - :mod:`dggrid4py.auxlat` - conversion between geodetic (WGS84) and authalic latitudes
 
