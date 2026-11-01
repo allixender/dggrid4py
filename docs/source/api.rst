@@ -2,6 +2,7 @@ API
 ===
 
 - :mod:`dggrid4py.DGGRID`
+- :mod:`dggrid4py.DGGRIDv9`
 - :mod:`dggrid4py.DGGRIDv8`
 - :mod:`dggrid4py.DGGRIDv7` (deprecated)
 - :mod:`dggrid4py.dggrid_runner`

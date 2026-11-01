@@ -1,12 +1,12 @@
 ﻿dggrid4py.DGGRIDv8
 ==================
 
-The DGGRIDv8 class is the class to use with DGGRID 8, for the classical DGGS types as well as for IGEO7.
+The DGGRIDv8 class is the class to use with DGGRID 8, for the classical DGGS types as well as for IGEO7. It also runs with DGGRID 9.1 and returns the same grids there (see :ref:`igeo7_dggrid91`), while :doc:`dggrid4py.DGGRIDv9` gives access to the new DGGS types and parameters of DGGRID 9.1.
 It selects the hierarchical indexes (Z3, Z7, ZORDER) through the address type ``HIERNDX`` and accepts the additional
 parameters of the DGGRID 8 series. The former address type names of the DGGRIDv7 class (e.g. ``Z7_STRING``)
 are mapped to ``HIERNDX`` with a ``DeprecationWarning``, see :doc:`../IGEO7`.
 
-The DGGRIDv7 class for DGGRID 7 is deprecated since version 0.6.0.
+The DGGRIDv7 class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in version 0.8.0.
 
 How to pass additional parameters to DGGRIDv8:
 
