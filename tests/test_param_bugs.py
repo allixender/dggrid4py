@@ -349,3 +349,8 @@ def test_extent_outputs_have_name_and_crs():
         assert list(gdf.columns) == ["name", "geometry"]
         assert gdf.crs == "EPSG:4326"
     assert sorted(polygons["name"]) == sorted(centroids["name"])
+
+
+def test_dgselect_unknown_dggs_type():
+    with pytest.raises(ValueError, match="unknown dggs_type: 'ISEA5H'"):
+        dgselect("ISEA5H", res=3)

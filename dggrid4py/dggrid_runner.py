@@ -406,6 +406,9 @@ def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
         'D' : 'DIAMOND'
     }
 
+    if dggs_type not in dggs_types:
+        raise ValueError(f"unknown dggs_type: '{dggs_type}', allowed are {list(dggs_types)}")
+
     if dggs_type in dggs_types:
         if dggs_type in ['SUPERFUND', 'PLANETRISK', 'IGEO7']:
             # keep it simple, only that spec
