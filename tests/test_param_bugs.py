@@ -387,3 +387,10 @@ def test_cells_for_geo_points_no_warning_without_name_column():
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
         dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5)
+
+
+def test_cell_ids_are_strings_also_for_seqnum():
+    dggrid = _dggrid()
+    assert isinstance(dggrid.grid_cellids_for_extent("ISEA7H", 2, output_address_type="SEQNUM").iloc[0, 0], str)
+    cells = dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5, output_address_type="SEQNUM")
+    assert all(isinstance(cell_id, str) for cell_id in cells["name"])

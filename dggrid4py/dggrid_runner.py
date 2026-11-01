@@ -1819,7 +1819,7 @@ class DGGRID(abc.ABC):
         **conf_extra: DggridMetaConfigParameterT,
     ) -> pd.DataFrame:
         """
-        generates a DGGS grid and returns all the cellids as a pandas dataframe
+        generates a DGGS grid and returns all the cellids as a pandas dataframe, the cell ids are strings (also SEQNUM)
             a) if clip_geom is empty/None: grid cell ids/seqnums for the WHOLE_EARTH
             b) if clip_geom is a shapely shape geometry, takes this as a clip area
 
@@ -1859,8 +1859,8 @@ class DGGRID(abc.ABC):
         if self.debug:
             print(dggs_ops)
 
-        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
-        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype=datatype)
+        # all cell ids stay strings, also SEQNUM: an INT64 or DIGIT_STRING id has leading zeros
+        df = pd.read_csv( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt" , header=None, dtype={0: str})
         df = df.dropna()
 
         if not self.debug:
@@ -1893,7 +1893,8 @@ class DGGRID(abc.ABC):
     ) -> gpd.GeoDataFrame:
         """
         takes a GeoDataFrame with point geometry and optional additional value columns and returns:
-            a) if cell_ids_only == True: a copy of the GeoDataFrame with the columns 'lon', 'lat' and the cell ids in 'name'
+            a) if cell_ids_only == True: a copy of the GeoDataFrame with the columns 'lon', 'lat' and the cell ids in 'name',
+               as strings (also SEQNUM). An existing column 'name' is replaced, with a warning
             b) if cell_ids_only == False: a new GeoDataFrame with geometry type Polygon, the cell ids in 'zone', and the additional columns
 
         The input GeoDataFrame is not modified. DGGRID takes the coordinates as lon/lat on its sphere, without a datum
@@ -1943,8 +1944,8 @@ class DGGRID(abc.ABC):
         dggs_ops = self.dgapi_grid_transform(dggs, subset_conf, **output_conf)
         if self.debug:
             print(dggs_ops)
-        datatype = {0: str} if (output_address_type is not ['SEQNUM', 'AIGEN']) else {}
-        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype=datatype)
+        # all cell ids stay strings, also SEQNUM: an INT64 or DIGIT_STRING id has leading zeros
+        df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0: str})
         df = df.dropna()
         cell_id_list = df[0].values
 
