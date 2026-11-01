@@ -401,3 +401,22 @@ def test_dgconstruct_is_deprecated_and_builds_a_dggs():
         dggs = dgconstruct(dggs_type="ISEA7H", aperture=7, res=5)
     assert dggs.dggs_type == "ISEA7H"
     assert dggs.resolution == 5
+
+
+def test_run_keeps_process_working_directory(monkeypatch):
+    dggrid = _dggrid()
+
+    def no_chdir(path):
+        raise AssertionError("run must not change the working directory of the process")
+
+    monkeypatch.setattr(os, "chdir", no_chdir)
+    stats = dggrid.grid_stats_table("ISEA7H", 2)
+    assert len(stats) == 3
+
+
+def test_run_relative_working_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "work").mkdir()
+    dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir="work", capture_logs=True, silent=True)
+    assert dggrid.grid_stats_table("ISEA7H", 2)["Cells"].tolist()[0] == 12
+    assert list((tmp_path / "work").glob("metafile_*")) == []

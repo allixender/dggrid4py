@@ -862,25 +862,25 @@ class DGGRID(abc.ABC):
     def run(self, dggs_meta_ops):
 
         dggs_meta_ops = self._metafile_for_executable(dggs_meta_ops)
-        curdir = os.getcwd()
         tmp_id = uuid.uuid4()
+        working_dir = Path(self.working_dir).resolve()
+        metafile = working_dir / f"metafile_{tmp_id}"
 
         # subprocess.call / Popen swat_exec, check if return val is 0 or not
         # yield logs?
         o = None
         try:
-            os.chdir(self.working_dir)
-
-            with open('metafile_' + str(tmp_id), 'w', encoding='utf-8') as metafile:
+            with open(metafile, 'w', encoding='utf-8') as f:
                 for line in dggs_meta_ops:
-                    metafile.write(line + '\n')
+                    f.write(line + '\n')
 
             self.last_ops_meta = dggs_meta_ops
             if self.debug:
                 print(dggs_meta_ops)
 
             logs = []
-            with subprocess.Popen([os.path.join(self.working_dir, self.executable), 'metafile_' + str(tmp_id)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
+            # relative paths in the metafile are relative to working_dir, the working directory of the process stays
+            with subprocess.Popen([str(working_dir / self.executable), metafile.name], cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
                 for b_line in o.stdout:
                     line = b_line.decode().strip()
                     # sys.stdout.write(line)
@@ -893,8 +893,8 @@ class DGGRID(abc.ABC):
                 self.last_run_successful = True
                 if not self.debug:
                     try:
-                        os.remove( 'metafile_' + str(tmp_id) )
-                    except Exception:
+                        metafile.unlink()
+                    except OSError:
                         pass
             else:
                 self.last_run_successful = False
@@ -909,8 +909,6 @@ class DGGRID(abc.ABC):
             print(repr(e))
             traceback.print_exc(file=sys.stdout)
             self.last_run_logs = repr(e)
-        finally:
-            os.chdir(curdir)
 
         if not o:
             return -1
