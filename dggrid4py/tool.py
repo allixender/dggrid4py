@@ -136,7 +136,7 @@ def portable_release(line=DEFAULT_LINE):
     Release tag in DGGRID_portables for a line of portable binaries.
 
     ``stable`` and ``edge`` are the lines that dggrid4py knows. Any other value is taken as the release tag
-    itself, e.g. ``edge-v91b`` for a development line or ``v8.44`` for a specific DGGRID release.
+    itself, e.g. ``v8.44`` or ``v9.1`` for a specific DGGRID release.
     """
     return PORTABLE_LINES.get(line, line)
 
@@ -155,7 +155,7 @@ def get_portable_executable(folder="./", line=DEFAULT_LINE, force=False):
         folder (str): where the binaries are kept, created if needed
         line (str): ``stable`` (default, the DGGRID release that this dggrid4py version is tested with),
             ``edge`` (rolling pre-release of the current DGGRID development version), or any release tag
-            of DGGRID_portables, e.g. ``edge-v91b``
+            of DGGRID_portables, e.g. ``v9.1``
         force (bool): download again, also if the binary is already there
 
     Returns:
