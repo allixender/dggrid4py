@@ -47,17 +47,15 @@ For IGEO7 with the Z7 index, continue with :ref:`igeo7_usage`.
 Developing dggrid4py with pixi
 """"""""""""""""""""""""""""""
 
-To run the dggrid4py test suite against the conda-forge DGGRID, create a pixi environment
-outside the repository and point ``DGGRID_PATH`` at its ``dggrid``:
+To run the dggrid4py test suite against the conda-forge DGGRID, use the ``pixi.toml`` in the root of the repository.
+It defines one environment for each tested DGGRID version and installs dggrid4py from the repository in editable
+mode, which is also how the tests run in the continuous integration:
 
 .. code-block:: console
 
-   $ pixi init dggrid4py-dev -c conda-forge && cd dggrid4py-dev
-   $ pixi add python=3.12 dggrid pytest geopandas shapely pandas numpy pyogrio pip
-   $ pixi run python -m pip install pygeodesy
    $ cd <path_to>/dggrid4py
-   $ DGGRID_PATH=<path_to>/dggrid4py-dev/.pixi/envs/default/bin/dggrid \
-       PYTHONPATH=. <path_to>/dggrid4py-dev/.pixi/envs/default/bin/python -m pytest tests
+   $ pixi run -e dggrid91 test
+   $ pixi run -e dggrid844 test
 
 Installation with pip
 ^^^^^^^^^^^^^^^^^^^^^

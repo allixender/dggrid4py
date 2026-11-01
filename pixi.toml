@@ -1,0 +1,30 @@
+[workspace]
+name = "dggrid4py"
+channels = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64", "win-64"]
+
+# GDAL 3.13 from conda-forge, via libpq, needs it
+[system-requirements]
+macos = "13.3"
+
+[dependencies]
+python = "3.12.*"
+geopandas = "*"
+pyogrio = "*"
+pytest = "*"
+
+[pypi-dependencies]
+dggrid4py = { path = ".", editable = true }
+
+[feature.dggrid844.dependencies]
+dggrid = "8.44.*"
+
+[feature.dggrid91.dependencies]
+dggrid = "9.1.*"
+
+[environments]
+dggrid844 = ["dggrid844"]
+dggrid91 = ["dggrid91"]
+
+[tasks]
+test = "pytest tests"

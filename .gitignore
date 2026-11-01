@@ -91,3 +91,7 @@ test_script.py
 
 dggrid4py.code-workspace
 .DS_Store
+
+# pixi, no lock file: runs against current conda-forge, closer to a new user
+.pixi/
+pixi.lock
