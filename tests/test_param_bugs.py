@@ -370,3 +370,20 @@ def test_address_transform_same_address_type_keeps_input():
     assert hexa["HIERNDX_input"].tolist() == digits
     # 16 hex characters, not the input form
     assert hexa["HIERNDX"].str.len().tolist() == [16, 16]
+
+
+def test_cells_for_geo_points_warns_if_name_column_is_replaced():
+    dggrid = _dggrid()
+    points = _points().rename(columns={"city": "name"})
+    with pytest.warns(UserWarning, match="replaces the existing column 'name'"):
+        cells = dggrid.cells_for_geo_points(points, True, "ISEA7H", 5)
+    # the caller's frame stays as it is, the copy has the cell ids
+    assert points["name"].tolist() == ["Lisbon", "Tartu"]
+    assert cells["name"].tolist() != ["Lisbon", "Tartu"]
+
+
+def test_cells_for_geo_points_no_warning_without_name_column():
+    dggrid = _dggrid()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5)

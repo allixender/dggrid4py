@@ -1958,6 +1958,13 @@ class DGGRID(abc.ABC):
                 pass
 
         if cell_ids_only:
+            if 'name' in geodf_points_wgs84.columns:
+                warnings.warn(
+                    "cells_for_geo_points replaces the existing column 'name' with the cell ids in the returned copy, "
+                    "rename the column to keep it",
+                    UserWarning,
+                    stacklevel=2,
+                )
             geodf_points_wgs84['name'] = cell_id_list
             return geodf_points_wgs84
         else:
