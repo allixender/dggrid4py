@@ -113,3 +113,10 @@ def test_meta_config_per_class():
     assert igeo7_ext.igeo7_meta_config(dggrid_instance=v8)["dggs_vert0_lon"] == 11.20
     assert igeo7_ext.igeo7_meta_config("INT64", v9) == {"input_hier_ndx_form": "INT64", "output_hier_ndx_form": "INT64"}
     assert igeo7_ext.igeo7_meta_config("INT64", v9, polyclip_algo="CLIPPER1")["polyclip_algo"] == "CLIPPER1"
+
+
+def test_neighbours_v9_without_cls_m_v8_needs_it():
+    v8, v9 = _instances()
+    assert len(igeo7_ext.z7_k1_ring_neighbours("00010224545", v9)) == 6
+    with pytest.raises(ValueError, match="needs cls_m"):
+        igeo7_ext.z7_k1_ring_neighbours("00010224545", v8)

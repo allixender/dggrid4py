@@ -270,18 +270,27 @@ def z7_is_pentagon(z7_str):
 
 
 
-def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **meta_overrides):
+def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m=None, stricter_clip=True, **meta_overrides):
     """
     Z7 ids (DIGIT_STRING form) of the direct neighbours of ``z7_str``.
 
-    ``cls_m`` is the characteristic length scale of the resolution in metres (see :func:`dggrid_get_res`).
-    All geometry work happens on DGGRID's authalic sphere, so no WGS84 conversion is needed here.
+    With :class:`DGGRIDv9`, DGGRID returns the neighbours by itself, and ``cls_m`` and ``stricter_clip`` are not used.
+    With :class:`DGGRIDv8`, ``cls_m`` is needed, which is the characteristic length scale of the resolution in metres
+    (see :func:`dggrid_get_res`). All geometry work happens on DGGRID's authalic sphere, so no WGS84 conversion
+    is needed there.
     """
     import pyproj
 
     _require_igeo7_instance(dggrid_instance)
     z7_str = str(z7_str)
     resolution = igeo7.get_z7string_resolution(z7_str)
+    if isinstance(dggrid_instance, DGGRIDv9):
+        neighbours = dggrid_instance.cell_neighbours(
+            [z7_str], 'IGEO7', resolution, **igeo7_meta_config('DIGIT_STRING', dggrid_instance, **meta_overrides)
+        )
+        return np.array(neighbours['neighbour'].tolist())
+    if cls_m is None:
+        raise ValueError("z7_k1_ring_neighbours needs cls_m with a DGGRIDv8 instance")
     parent, local_pos, is_center = igeo7.get_z7string_local_pos(z7_str)
 
     if is_center:
@@ -314,8 +323,6 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
 
     # neighbour_field is already on the authalic sphere, pass it to DGGRID as is
     meta = igeo7_meta_config('DIGIT_STRING', dggrid_instance, **meta_overrides)
-    if not _authalic_conversion_needed(dggrid_instance):
-        meta = {**meta, "input_datum": "AUTHALIC_SPHERE", "output_datum": "AUTHALIC_SPHERE"}
     k_ring_group = dggrid_instance.grid_cell_centroids_for_extent('IGEO7',
                                                                   resolution,
                                                                   clip_geom=neighbour_field,
