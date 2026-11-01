@@ -2420,6 +2420,15 @@ def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
                 pole_lat_deg: float         = 58.28252559, # dggs_vert0_lat
                 pole_lon_deg: float         = 11.25 # dggs_vert0_lon
                 ):
+    """
+    .. deprecated:: 0.6.2
+        Use :func:`dgselect`. This function failed on every call up to version 0.6.1, and only ``res`` can be used.
+    """
+    warnings.warn(
+        "dgconstruct is deprecated since dggrid4py 0.6.2 and will be removed in a future version, use dgselect",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
     if not len(list(filter(lambda x: not x is None, [res,area,spacing,cls_val])))  == 1:
         raise ValueError('dgconstruct(): Only one of res, area, length, or cls can have a value!')
@@ -2431,14 +2440,14 @@ def dgconstruct(dggs_type: DggsTypeT        = "CUSTOM", # dggs_type
         pole_lat_deg = pole_lat_deg,
         azimuth_deg  = azimuth_deg,
         aperture     = aperture,
-        res          = 1,
+        resolution   = 1,
         topology     = topology.upper(),
         projection   = projection.upper(),
         precision    = precision
     )
 
     if not res is None:
-        dggs.res = res
+        dggs.resolution = res
     elif not area is None:
         dggs.res = dggs.dg_closest_res_to_area (area=area, resround=resround,metric=metric,show_info=True)
     elif not spacing is None :

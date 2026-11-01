@@ -11,7 +11,7 @@ import geopandas as gpd
 
 from dggrid4py import DGGRIDv7, DGGRIDv8
 from dggrid4py.auxlat import geoseries_to_authalic
-from dggrid4py.dggrid_runner import AnyDGGRID, dg_grid_meta, dgselect, get_geo_out, specify_clip_settings
+from dggrid4py.dggrid_runner import AnyDGGRID, dg_grid_meta, dgconstruct, dgselect, get_geo_out, specify_clip_settings
 
 # IGEO7 reference cells: dggs_vert0_lon 11.20, authalic latitudes, Z7 digit strings at resolution 5, 6 and 9
 LISBON = (-9.1393, 38.7223)
@@ -394,3 +394,10 @@ def test_cell_ids_are_strings_also_for_seqnum():
     assert isinstance(dggrid.grid_cellids_for_extent("ISEA7H", 2, output_address_type="SEQNUM").iloc[0, 0], str)
     cells = dggrid.cells_for_geo_points(_points(), True, "ISEA7H", 5, output_address_type="SEQNUM")
     assert all(isinstance(cell_id, str) for cell_id in cells["name"])
+
+
+def test_dgconstruct_is_deprecated_and_builds_a_dggs():
+    with pytest.warns(DeprecationWarning, match="use dgselect"):
+        dggs = dgconstruct(dggs_type="ISEA7H", aperture=7, res=5)
+    assert dggs.dggs_type == "ISEA7H"
+    assert dggs.resolution == 5
