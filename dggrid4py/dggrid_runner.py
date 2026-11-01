@@ -435,11 +435,25 @@ def __getattr__(name):  # for backward compatibility helper/warning
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
-def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
+def dgselect(dggs_type: DggsTypeT, minimal: bool = False, **kwargs) -> "Dggs":
     """
     helper function to create a DGGS config quickly
+
+    With ``minimal=True`` the config has only the given parameters and DGGRID takes everything else from its preset.
+    Otherwise the projection, aperture, topology and orientation are always written to the metafile, and these
+    override what a preset of DGGRID 9 defines (e.g. the orientation of IGEO7v2 or the Fuller projection).
     """
     dggs = None
+
+    if minimal:
+        if dggs_type not in dggs_types_v9:
+            raise ValueError(f"unknown dggs_type: '{dggs_type}', allowed are {list(dggs_types_v9)}")
+        dggs = Dggs(dggs_type=dggs_type, projection=None, aperture=None, topology=None, precision=None,
+                    azimuth_deg=None, pole_lat_deg=None, pole_lon_deg=None)
+        for res_opt in ['res', 'precision', 'area', 'spacing', 'cls_val', 'mixed_aperture_level']:
+            if kwargs.get(res_opt) is not None:
+                dggs.set_par(res_opt, kwargs[res_opt])
+        return dggs
 
     topo_dict = {
         'H' : 'HEXAGON',
@@ -563,6 +577,7 @@ def dg_grid_meta(dggs: "Dggs") -> DggridMetafileT:
     if dggs.dggs_type == 'CUSTOM':
         raise ValueError('custom not yet implemented')
     dggs_meta = dggs.to_dict()
+    dggs_meta.update(dggs.extra_params)
     dggs_meta.update(specify_resolution(**dggs_meta))
     dggs_meta.update(specify_topo_aperture(**dggs_meta))
     dggs_meta.update(specify_orient_type_args(**dggs_meta))
@@ -598,12 +613,15 @@ class Dggs:
     pole_lat_deg: DggsDegree = 58.28252559
     pole_lon_deg: DggsDegree = 11.25
     mixed_aperture_level: int | None = None
+    # further DGGRID parameters for the metafile, as {parameter: value}
+    extra_params: dict[str, DggridMetaConfigParameterT] = dataclasses.field(default_factory=dict)
 
     _hide_metafile = [
         'metric',
         'show_info',
         'resround',
         'spacing',
+        'extra_params',
         '_aliases',
     ]
 
