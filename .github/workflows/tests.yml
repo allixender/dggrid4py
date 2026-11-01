@@ -8,75 +8,27 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    # dggrid4py never ran in CI on Windows before, see #20
+    continue-on-error: ${{ matrix.os == 'windows-latest' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        environment: [dggrid844, dggrid91]
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
+      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.os }}-${{ matrix.environment }}
       cancel-in-progress: true
-    env:
-      DGGRID_REPO: https://github.com/sahrk/DGGRID.git
-      DGGRID_SOURCE_DIR: dggrid_src
-      DGGRID_INSTALL_DIR: ${{ github.workspace }}/DGGRID/bin
-      DGGRID_VERSION: v8.44
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up pixi
+        uses: prefix-dev/setup-pixi@v0.11.2
         with:
-          python-version: '3.12'
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            .venv
-          key: ${{ runner.os }}-dependencies-${{ hashFiles('**/pyproject.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-dependencies
-
-      - name: Install Poetry
-        run: pip install poetry
-
-      - name: Install dependencies
-        run: poetry install --with test
-
-      - name: Cache DGGRID build
-        id: dggrid_cache
-        uses: actions/cache@v3
-        with:
-          path: ${{ env.DGGRID_INSTALL_DIR }}
-          key: ${{ runner.os }}-dggrid-bin-${{ env.DGGRID_VERSION }}
-          restore-keys: |
-            ${{ runner.os }}-dggrid-bin-${{ env.DGGRID_VERSION }}
-
-      - name: Clone DGGRID
-        if: steps.dggrid_cache.outputs.cache-hit != 'true'
-        run: |
-          git clone --depth 1 --branch "$DGGRID_VERSION" $DGGRID_REPO $DGGRID_SOURCE_DIR
-
-      - name: Setup CMake
-        if: steps.dggrid_cache.outputs.cache-hit != 'true'
-        uses: jwlawson/actions-setup-cmake@v1
-        with:
-          cmake-version: '3.20.x'
-
-      - name: Install GDAL
-        if: steps.dggrid_cache.outputs.cache-hit != 'true'
-        run: sudo apt-get update && sudo apt-get install -y gdal-bin libgdal-dev
-
-      - name: Build DGGRID
-        if: steps.dggrid_cache.outputs.cache-hit != 'true'
-        run: |
-          mkdir -p ${DGGRID_INSTALL_DIR}
-          mkdir -p ${DGGRID_SOURCE_DIR}/build
-          cd ${DGGRID_SOURCE_DIR}/build
-          cmake -DCMAKE_BUILD_TYPE=Release -DWITH_GDAL=ON ..
-          make -j$(nproc)
-          cp src/apps/dggrid/dggrid ${DGGRID_INSTALL_DIR}/
+          environments: ${{ matrix.environment }}
+          # no pixi.lock in the repository, every run solves against current conda-forge
+          cache: false
 
       - name: Run tests
-        env:
-          DGGRID_PATH: ${{ env.DGGRID_INSTALL_DIR }}/dggrid
-        run: sudo apt-get update && sudo apt-get install -y libgdal-dev && poetry run pytest
+        run: pixi run -e ${{ matrix.environment }} test

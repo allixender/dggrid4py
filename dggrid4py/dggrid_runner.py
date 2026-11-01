@@ -15,6 +15,7 @@ import decimal
 import uuid
 import shutil
 import os
+import re
 import sys
 import subprocess
 import traceback
@@ -642,6 +643,15 @@ class Dggs:
         raise ValueError('not yet implemented')
 
 
+def _read_dggrid_version(executable: str) -> tuple[int, int] | None:
+    try:
+        result = subprocess.run([executable, '-v'], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    match = re.search(r'DGGRID version\s+(\d+)\.(\d+)', result.stdout + result.stderr)
+    return (int(match[1]), int(match[2])) if match else None
+
+
 class DGGRID(abc.ABC):
     """
     Abstract instance that needs to be instantiated once to tell where to use and execute the dggrid cmd tool.
@@ -664,6 +674,8 @@ class DGGRID(abc.ABC):
         self.tmp_geo_out = get_geo_out(legacy=tmp_geo_out_legacy, has_gdal=has_gdal)
         self.has_gdal = has_gdal
         self.debug = debug
+        self._dggrid_version = None
+        self._dggrid_version_of = None
 
         if working_dir is None:
             self.working_dir = tempfile.mkdtemp(prefix='dggrid_')
@@ -817,8 +829,36 @@ class DGGRID(abc.ABC):
         return is_runnable
 
 
+    @property
+    def dggrid_version(self) -> tuple[int, int] | None:
+        """
+        (major, minor) version of the DGGRID executable, e.g. (9, 1), from the output of ``dggrid -v``.
+
+        The executable is only asked once, at first use. None if it can't be run or doesn't report a version.
+        """
+        executable = str(self.executable)
+        if self._dggrid_version_of != executable:
+            self._dggrid_version = _read_dggrid_version(executable)
+            self._dggrid_version_of = executable
+        return self._dggrid_version
+
+
+    def _metafile_for_executable(self, dggs_meta_ops):
+        # Since DGGRID 9.1, dggs_type IGEO7 means IGEO7v2, with geodetic latitudes in input and output. The classes
+        # for DGGRID 7 and 8 define IGEO7 without a datum conversion, which is IGEO7v1 in DGGRID 9.1. Without this,
+        # latitudes that are already authalic (dggrid4py.auxlat, igeo7_ext) would be converted a second time.
+        if (
+            self.version < 9
+            and 'dggs_type IGEO7' in dggs_meta_ops
+            and (self.dggrid_version or (0, 0)) >= (9, 1)
+        ):
+            return ['dggs_type IGEO7v1' if line == 'dggs_type IGEO7' else line for line in dggs_meta_ops]
+        return dggs_meta_ops
+
+
     def run(self, dggs_meta_ops):
 
+        dggs_meta_ops = self._metafile_for_executable(dggs_meta_ops)
         curdir = os.getcwd()
         tmp_id = uuid.uuid4()
 

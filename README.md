@@ -6,7 +6,7 @@
 
 GNU AFFERO GENERAL PUBLIC LICENSE
 
-[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 8.44 was released 2. April 2026 (version 9.03b on 5. October 2026).
+[DGGRID](https://www.discreteglobalgrids.org/software/) is a free software program for creating and manipulating Discrete Global Grids created and maintained by Kevin Sahr. DGGRID version 9.1 was released 23. October 2026 (version 8.44 on 2. April 2026).
 
 - [DGGRID on GitHub](https://github.com/sahrk/DGGRID)
 - [DGGRID User Manual (readthedocs)](https://dggrid.readthedocs.io/latest/)
@@ -46,7 +46,7 @@ Besides some low-level access to influence the metafile creation of the DGGRID o
 - address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
 - grid_stats_table(): number of cells, cell area and spacing per resolution.
 
-Use the `DGGRIDv8` class with DGGRID 8.42 or newer (it also runs the 9.0b pre-release). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in a future version.
+Use the `DGGRIDv8` class with DGGRID 8.42 or newer, including DGGRID 9.1. IGEO7 with DGGRID 9.1, the current version on conda-forge, needs dggrid4py 0.6.1 or newer: dggrid4py 0.6.0 returns wrong cell identifiers there without an error, see [IGEO7 in DGGRID 9.1](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html#igeo7-in-dggrid-9-1). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in a future version.
 
 ```python
 import shutil
@@ -171,7 +171,7 @@ After some unsuccessful trials with ctypes, cython, CFFI, pybind11 or cppyy (rat
 ## Bundling for different operating systems
 
 Having to compile DGGRID for Windows can be a bit challenging. We are
-working on an updated conda package. DGGRID (currently v8.44) is available on conda-forge, which is what the pixi quickstart above uses:
+working on an updated conda package. DGGRID (currently v9.1) is available on conda-forge, which is what the pixi quickstart above uses:
 
 [![Latest version on conda-forge](https://anaconda.org/conda-forge/dggrid/badges/version.svg)](https://anaconda.org/conda-forge/dggrid)
 

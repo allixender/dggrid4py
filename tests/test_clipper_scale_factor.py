@@ -3,6 +3,7 @@
 import decimal
 import inspect
 import os
+import shutil
 import tempfile
 
 import pytest
@@ -12,7 +13,7 @@ from geopandas.testing import assert_geodataframe_equal
 
 from dggrid4py import DGGRIDv8, Dggs
 
-dggrid_path = os.getenv("DGGRID_PATH")
+dggrid_path = os.getenv("DGGRID_PATH") or shutil.which("dggrid")
 dggrid = DGGRIDv8(executable=dggrid_path, debug=True)
 
 

@@ -21,6 +21,8 @@ dggrid4py from PyPI, so you don't need to compile anything.
    $ pixi add --pypi dggrid4py
 
 ``dggrid4py`` pulls in ``pygeodesy`` from PyPI (it is not available on conda-forge).
+This installs the current DGGRID version from conda-forge, which is DGGRID 9.1 at the moment; IGEO7 with DGGRID 9.1
+needs dggrid4py 0.6.1 or newer (see :ref:`igeo7_dggrid91`).
 Check that the ``dggrid`` executable is available in the environment:
 
 .. code-block:: console
@@ -45,17 +47,15 @@ For IGEO7 with the Z7 index, continue with :ref:`igeo7_usage`.
 Developing dggrid4py with pixi
 """"""""""""""""""""""""""""""
 
-To run the dggrid4py test suite against the conda-forge DGGRID, create a pixi environment
-outside the repository and point ``DGGRID_PATH`` at its ``dggrid``:
+To run the dggrid4py test suite against the conda-forge DGGRID, use the ``pixi.toml`` in the root of the repository.
+It defines one environment for each tested DGGRID version and installs dggrid4py from the repository in editable
+mode, which is also how the tests run in the continuous integration:
 
 .. code-block:: console
 
-   $ pixi init dggrid4py-dev -c conda-forge && cd dggrid4py-dev
-   $ pixi add python=3.12 dggrid pytest geopandas shapely pandas numpy pyogrio pip
-   $ pixi run python -m pip install pygeodesy
    $ cd <path_to>/dggrid4py
-   $ DGGRID_PATH=<path_to>/dggrid4py-dev/.pixi/envs/default/bin/dggrid \
-       PYTHONPATH=. <path_to>/dggrid4py-dev/.pixi/envs/default/bin/python -m pytest tests
+   $ pixi run -e dggrid91 test
+   $ pixi run -e dggrid844 test
 
 Installation with pip
 ^^^^^^^^^^^^^^^^^^^^^
@@ -107,10 +107,9 @@ returned if there is no network connection. The portable binaries are published 
 selected with the ``line`` argument:
 
 - ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 8.44;
-- ``edge`` is a rolling pre-release that follows the DGGRID development version (currently DGGRID 9.0b), and it is
+- ``edge`` is a rolling pre-release that follows the DGGRID development version (currently DGGRID 9.1), and it is
   downloaded again after it was rebuilt;
-- any other value is taken as a release tag of DGGRID_portables, e.g. ``edge-v91b`` for a development line or
-  ``v8.44`` for a specific DGGRID release.
+- any other value is taken as a release tag of DGGRID_portables, e.g. ``v8.44`` or ``v9.1`` for a specific DGGRID release.
 
 .. code:: python
 
@@ -124,6 +123,9 @@ should be considered:
   as with a GDAL build;
 - DGGRID 9 removes the address types ``Z7``, ``Z7_STRING`` and their Z3 and ZORDER counterparts, as well as the
   ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` class;
+- on macOS, a binary that was downloaded with a web browser has to be cleared once with
+  ``xattr -d com.apple.quarantine dggrid``, because the binaries are not notarised; this is not needed for the
+  download with ``get_portable_executable``;
 - on Windows arm64, coordinates can differ by up to about 1e-5 degrees from the other platforms (see the release notes).
 
 
@@ -147,7 +149,7 @@ functions are integrated to work with the more comfortable geopython libraries, 
 -  grid_stats_table(): number of cells, cell area and spacing per resolution.
 
 The functions are methods of a DGGRID instance, which knows where the ``dggrid`` executable lives. Use the
-``DGGRIDv8`` class with DGGRID 8.42 or newer (it also runs the 9.0b pre-release). The following example uses
+``DGGRIDv8`` class with DGGRID 8.42 or newer, including DGGRID 9.1 (see :ref:`igeo7_dggrid91`). The following example uses
 the classical DGGS types of DGGRID with their default orientation.
 
 .. deprecated:: 0.6.0
