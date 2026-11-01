@@ -646,6 +646,22 @@ class Dggs:
         raise ValueError('not yet implemented')
 
 
+def _geo_file_names(stem: str, tmp_geo_out: dict) -> list[str]:
+    names = [f"{stem}.{tmp_geo_out['ext']}"]
+    if "SHAPEFILE" in tmp_geo_out['driver'].upper():
+        names += [f"{stem}.{ext}" for ext in ['dbf', 'prj', 'shx', 'cpg']]
+    return names
+
+
+def _remove_tmp_files(tmp_dir: str, *file_names: str) -> None:
+    # each file on its own, a file that is missing or can't be removed must not keep the others around
+    for file_name in file_names:
+        try:
+            (Path(tmp_dir) / file_name).unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
 def _read_dggrid_version(executable: str) -> tuple[int, int] | None:
     try:
         result = subprocess.run([executable, '-v'], capture_output=True, text=True, timeout=30)
@@ -814,7 +830,7 @@ class DGGRID(abc.ABC):
         if not take_1 is None:
             takes.append(take_1)
 
-        take_2 = shutil.which(os.path.join(self.working_dir, self.executable))
+        take_2 = shutil.which(Path(self.working_dir) / self.executable)
         if not take_2 is None:
             takes.append(take_2)
 
@@ -1496,24 +1512,7 @@ class DGGRID(abc.ABC):
         gdf = self.read_geo_out(path)
 
         if not self.debug:
-            try:
-                os.remove(path)
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "points.gen")
 
         if split_dateline:
             return self.post_process_split_dateline(gdf)
@@ -1579,24 +1578,7 @@ class DGGRID(abc.ABC):
         gdf = self.read_geo_out(Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}")
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"cells.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "cells.gen")
 
         return gdf
 
@@ -1685,24 +1667,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), f"temp_clip_{tmp_id}.txt", "points.gen")
 
         if split_dateline:
             return self.post_process_split_dateline(gdf)
@@ -1791,18 +1756,7 @@ class DGGRID(abc.ABC):
             # gdf = gdf.loc[gdf['cell_exists']].drop(columns=['cell_exists'])
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"cells.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, *_geo_file_names(f"temp_{dggs_type}_{resolution}_out_{tmp_id}", self.tmp_geo_out), f"temp_clip_{tmp_id}.txt", "cells.gen")
 
         return gdf
 
@@ -1862,18 +1816,7 @@ class DGGRID(abc.ABC):
         df = df.dropna()
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{self.tmp_geo_out['ext']}") )
-                if "SHAPEFILE" in self.tmp_geo_out['driver'].upper():
-                    for ext in ['dbf', 'prj', 'shx', 'cpg']:
-                        os.remove( str( Path(tmp_dir) / f"temp_clip_{tmp_id}.{ext}") )
-            except Exception:
-                pass
-            try:
-                os.remove( str( Path(tmp_dir) / f"points.gen") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"temp_{dggs_type}_{resolution}_out_{tmp_id}.txt", *_geo_file_names(f"temp_clip_{tmp_id}", self.tmp_geo_out), "points.gen")
 
         return df
 
@@ -1948,13 +1891,7 @@ class DGGRID(abc.ABC):
         cell_id_list = df[0].values
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"geo_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"{output_address_type}_{tmp_id}.txt") )
-                # probably not needed anymore
-                os.remove( str( Path(tmp_dir) / f"seqnums_{tmp_id}.txt") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"geo_{tmp_id}.txt", f"{output_address_type}_{tmp_id}.txt")
 
         if cell_ids_only:
             if 'name' in geodf_points_wgs84.columns:
@@ -2063,11 +2000,7 @@ class DGGRID(abc.ABC):
         seq_df[output_column] = df.iloc[:,0]
 
         if not self.debug:
-            try:
-                os.remove( str( Path(tmp_dir) / f"temp_in_{input_address_type}_{tmp_id}.txt") )
-                os.remove( str( Path(tmp_dir) / f"temp_out_{output_address_type}_{tmp_id}.txt") )
-            except Exception:
-                pass
+            _remove_tmp_files(tmp_dir, f"temp_in_{input_address_type}_{tmp_id}.txt", f"temp_out_{output_address_type}_{tmp_id}.txt")
 
         return seq_df
 

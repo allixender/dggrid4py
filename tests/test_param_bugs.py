@@ -420,3 +420,16 @@ def test_run_relative_working_dir(tmp_path, monkeypatch):
     dggrid = DGGRIDv8(executable=_dggrid_path(), working_dir="work", capture_logs=True, silent=True)
     assert dggrid.grid_stats_table("ISEA7H", 2)["Cells"].tolist()[0] == 12
     assert list((tmp_path / "work").glob("metafile_*")) == []
+
+
+def test_no_temp_files_left_behind():
+    dggrid = _dggrid()
+    points = _points()
+    dggrid.grid_cell_polygons_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cell_centroids_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cellids_for_extent("ISEA7H", 6, clip_geom=TARTU_BOX)
+    dggrid.grid_cell_polygons_from_cellids([1, 4], "ISEA7H", 3)
+    dggrid.grid_cell_centroids_from_cellids([1, 4], "ISEA7H", 3)
+    dggrid.cells_for_geo_points(points, True, "ISEA7H", 5)
+    dggrid.address_transform([1, 4], "ISEA7H", 3, output_address_type="Q2DI")
+    assert sorted(os.listdir(dggrid.working_dir)) == []
