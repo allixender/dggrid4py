@@ -8,10 +8,11 @@ import os
 import shutil
 import tempfile
 
+import geopandas as gpd
 import pytest
 import shapely
 
-from dggrid4py import DGGRIDv8, tool
+from dggrid4py import DGGRIDv8, igeo7_ext, tool
 
 clip_bound = shapely.geometry.box(27.2, 57.5, 29.3, 59.2)
 
@@ -81,13 +82,27 @@ def test_grid_cell_centroids_from_cellids(portable_dggrid, local_dggrid, cellids
     assert _names(portable) == _names(local) == sorted(cellids100)
 
 
+def _same_dggrid_version(portable_dggrid, local_dggrid):
+    # COARSE_CELLS returns slightly different neighbouring cells in DGGRID 8.44 and 9.1, with GDAL and without
+    if portable_dggrid.dggrid_version != local_dggrid.dggrid_version:
+        pytest.skip(f"portable DGGRID {portable_dggrid.dggrid_version}, local DGGRID {local_dggrid.dggrid_version}")
+
+
+def test_igeo7_reference_cells(portable_dggrid):
+    points = gpd.GeoDataFrame(geometry=gpd.points_from_xy([-9.1393, 26.7220], [38.7223, 58.3776]), crs=4326)
+    cells = igeo7_ext.dggrid_igeo7_cells_for_geo_points(points, 9, portable_dggrid)
+    assert cells["name"].tolist() == ["00641565463", "00010224545"]
+
+
 def test_grid_cell_polygons_from_cellids_coarse_cells(portable_dggrid, local_dggrid, cellids100):
+    _same_dggrid_version(portable_dggrid, local_dggrid)
     portable = portable_dggrid.grid_cell_polygons_from_cellids(cellids100, "IGEO7", 5, clip_subset_type="COARSE_CELLS", clip_cell_res=3, **IGEO7)
     local = local_dggrid.grid_cell_polygons_from_cellids(cellids100, "IGEO7", 5, clip_subset_type="COARSE_CELLS", clip_cell_res=3, **IGEO7)
     assert _names(portable) == _names(local)
 
 
 def test_grid_cell_centroids_from_cellids_coarse_cells(portable_dggrid, local_dggrid, cellids100):
+    _same_dggrid_version(portable_dggrid, local_dggrid)
     portable = portable_dggrid.grid_cell_centroids_from_cellids(cellids100, "IGEO7", 5, clip_subset_type="COARSE_CELLS", clip_cell_res=3, **IGEO7)
     local = local_dggrid.grid_cell_centroids_from_cellids(cellids100, "IGEO7", 5, clip_subset_type="COARSE_CELLS", clip_cell_res=3, **IGEO7)
     assert _names(portable) == _names(local)
