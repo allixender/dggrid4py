@@ -60,7 +60,7 @@ Both adjustments are available in DGGRID itself since version 9.1, which changes
 - ``IGEO7v2`` applies ``dggs_vert0_lon = 11.20`` and takes WGS84 coordinates in input and output, which is the IGEO7 of the first row in the table above; ``IGEO7`` is now an alias for this type and DGGRID logs a warning for it;
 - ``IGEO7v1`` is the former ``IGEO7`` type (``dggs_vert0_lon = 11.25``, authalic sphere), which is the last row in the table above.
 
-Since version 0.6.1, the ``DGGRIDv8`` class keeps its meaning of ``IGEO7`` on all DGGRID versions and runs it as ``IGEO7v1`` with DGGRID 9.1 or newer, so that the wrappers and the explicit configuration below return the same cell identifiers as before. A ``DGGRIDv9`` class for the new DGGS types is in preparation.
+Since version 0.6.1, the ``DGGRIDv8`` class keeps its meaning of ``IGEO7`` on all DGGRID versions and runs it as ``IGEO7v1`` with DGGRID 9.1 or newer, so that the wrappers and the explicit configuration below return the same cell identifiers as before. Since version 0.7.0, the ``DGGRIDv9`` class uses the new DGGS types directly, see :ref:`igeo7_v9`.
 
 .. warning::
 
@@ -118,6 +118,39 @@ The example below needs DGGRID 8.42 or newer, e.g. the current version from cond
     neighbours = igeo7_ext.z7_k1_ring_neighbours(cells["name"].iloc[0], dggrid_instance, cls_m)
 
 ``hier_ndx_form='INT64'`` switches all wrappers to the 64 bit Z7 form. DGGRID writes this form as a 16 character hex string (e.g. ``'0042529bffffffff'``), which :mod:`dggrid4py.igeo7` can decode (``igeo7.z7hex_to_z7string('0042529bffffffff')`` returns ``'00010224515'``). Any other DGGRID parameter can be passed as keyword argument and overrides the defaults, e.g. ``dggs_vert0_lon=11.25`` for the orientation of the DGGRID preset.
+
+
+.. _igeo7_v9:
+
+Direct use with ``DGGRIDv9``
+----------------------------
+
+With DGGRID 9.1 or newer, the :doc:`dggrid4py/dggrid4py.DGGRIDv9` class needs neither a conversion of the latitudes nor further parameters, because ``IGEO7`` runs as ``IGEO7v2`` there. WGS84 coordinates go in and come out, and the returned GeoDataFrame has ``EPSG:4326`` as coordinate reference system. The cell identifiers have the ``INT64`` form by default, which DGGRID writes as a 16 character hex string, and ``DIGIT_STRING`` has to be requested:
+
+.. code:: python
+
+    from dggrid4py import DGGRIDv9
+
+    dggrid_v9 = DGGRIDv9(shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+
+    # cell polygons for an extent, in and out in wgs84
+    cells_v9 = dggrid_v9.grid_cell_polygons_for_extent("IGEO7", 9, clip_geom=extent, output_hier_ndx_form="DIGIT_STRING")
+
+    # Z7 cell ids for wgs84 points
+    sites = gpd.GeoDataFrame(
+        {"site": ["Lisbon", "Tartu"]},
+        geometry=gpd.points_from_xy([-9.1393, 26.7220], [38.7223, 58.3776]),
+        crs=4326,
+    )
+    sites = dggrid_v9.cells_for_geo_points(sites, True, "IGEO7", 9, output_hier_ndx_form="DIGIT_STRING")
+    print(sites["name"].tolist())   # ['00641565463', '00010224545']
+
+    # cell polygons for a list of Z7 cell ids
+    polygons_v9 = dggrid_v9.grid_cell_polygons_from_cellids(
+        sites["name"], "IGEO7", 9, input_hier_ndx_form="DIGIT_STRING", output_hier_ndx_form="DIGIT_STRING"
+    )
+
+The former IGEO7 preset of the original publication stays available as ``IGEO7v1``, with ``dggs_vert0_lon = 11.25`` and without a conversion. Its coordinates are on the authalic sphere, which is also the coordinate reference system of the returned GeoDataFrame. The names can be confusing, because ``IGEO7v1`` is not the IGEO7 that dggrid4py used with DGGRID 8 by means of the two adjustments above; this one is ``IGEO7v2``.
 
 
 Explicit configuration with ``DGGRIDv8``
@@ -233,7 +266,7 @@ Earlier examples for IGEO7 used the ``DGGRIDv7`` class with ``output_address_typ
 
 Since version 0.6.0, the ``DGGRIDv8`` class accepts the old names, maps them according to this table and issues a ``DeprecationWarning``. An address type that is not known at all raises a ``ValueError``. Up to version 0.5.3, ``DGGRIDv8`` ignored an address type that it did not know, without an error, and returned sequence numbers or the cell of another identifier. Results that were produced with ``Z7_STRING`` and ``DGGRIDv8`` in these versions should therefore be checked.
 
-The ``DGGRIDv7`` class itself is deprecated since version 0.6.0. It still works with the old names, but it issues a ``DeprecationWarning`` when an instance is created, it does not run with DGGRID 9, and it will be removed in a future version. Code that moves to ``DGGRIDv8`` continues to work, but it uses the DGGRID preset (11.25, no authalic conversion) as before, as long as the orientation and the conversion are not added as described above.
+The ``DGGRIDv7`` class itself is deprecated since version 0.6.0. It still works with the old names, but it issues a ``DeprecationWarning`` when an instance is created, it does not run with DGGRID 9, and it will be removed in version 0.8.0. Code that moves to ``DGGRIDv8`` continues to work, but it uses the DGGRID preset (11.25, no authalic conversion) as before, as long as the orientation and the conversion are not added as described above.
 
 
 API Reference
