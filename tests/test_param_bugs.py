@@ -10,7 +10,7 @@ import shapely
 import geopandas as gpd
 
 from dggrid4py import DGGRIDv7, DGGRIDv8
-from dggrid4py.auxlat import geoseries_to_authalic
+from dggrid4py.auxlat import geodetic_to_authalic, geoseries_to_authalic
 from dggrid4py.dggrid_runner import AnyDGGRID, dg_grid_meta, dgconstruct, dgselect, get_geo_out, specify_clip_settings
 
 # IGEO7 reference cells: dggs_vert0_lon 11.20, authalic latitudes, Z7 digit strings at resolution 5, 6 and 9
@@ -464,3 +464,25 @@ def test_grid_stats_table_keeps_decimals_at_high_resolution():
     stats = _dggrid().grid_stats_table("ISEA3H", 20)
     assert stats["Area (km^2)"].iloc[20] == pytest.approx(0.0146285, rel=1e-3)
     assert stats["CLS (km)"].iloc[20] == pytest.approx(0.136476, rel=1e-3)
+
+
+def test_authalic_conversion_keeps_structure_of_geometry():
+    hole = [(26.70, 58.35), (26.72, 58.35), (26.72, 58.37), (26.70, 58.37)]
+    polygon = shapely.Polygon([(26.6, 58.3), (26.85, 58.3), (26.85, 58.45), (26.6, 58.45)], [hole])
+    geometries = [
+        shapely.Point(26.72, 58.37),
+        shapely.Point(26.72, 58.37, 42.0),
+        polygon,
+        shapely.MultiPolygon([polygon, polygon]),
+        shapely.LineString([(26.6, 58.3), (26.85, 58.45)]),
+    ]
+    converted = geoseries_to_authalic(gpd.GeoSeries(geometries))
+    for before, after in zip(geometries, converted):
+        assert after.geom_type == before.geom_type
+        assert shapely.get_num_coordinates(after) == shapely.get_num_coordinates(before)
+        # only the latitudes change, by around 0.1 degrees at 58 degrees north
+        assert after.bounds[0] == before.bounds[0]
+        assert 0.05 < before.bounds[1] - after.bounds[1] < 0.2
+    assert converted.iloc[1].z == 42.0
+    assert len(converted.iloc[2].interiors) == 1
+    assert converted.iloc[0].equals_exact(shapely.Point(26.72, float(geodetic_to_authalic(58.37))), 1e-12)
