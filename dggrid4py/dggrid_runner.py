@@ -92,7 +92,9 @@ DggsClipSubsetTypeT = Literal[
     'AIGEN',
     'SEQNUMS',
     'COARSE_CELLS',
-    'INPUT_ADDRESS_TYPE'
+    'COARSE_CELL_FILES',  # since DGGRID 9
+    'INPUT_ADDRESS_TYPE',  # ADDRESS_FILES since DGGRID 9
+    'ADDRESS_FILES',
 ]
 clip_subset_types = get_args(DggsClipSubsetTypeT)
 
@@ -286,6 +288,47 @@ dggrid_operations = get_args(DggridOperationsT)
 
 DggsDegree = decimal.Decimal | float | str   # allow string to hardcode strictly
 
+# DGGRID 9.1, names as in the dggs_type parameter of DGGRID. H3 needs a DGGRID built with H3, and there is no such
+# build to test with. S: spherical, L: on the WGS84 ellipsoid, Z: with a hierarchical index
+dggs_types_hierarchical_v9 = (
+    'IGEO7', 'IGEO7v1', 'IGEO7v2',
+    'ISEA3HSZ', 'ISEA4HSZ', 'ISEA7HSZ', 'ISEA3HLZ', 'ISEA4HLZ', 'ISEA7HLZ',
+    'IVEA3HSZ', 'IVEA4HSZ', 'IVEA7HSZ', 'IVEA3HLZ', 'IVEA4HLZ', 'IVEA7HLZ',
+)
+dggs_types_v9 = (
+    'SUPERFUND', 'PLANETRISK',
+    'ISEA3H', 'ISEA4H', 'ISEA7H', 'ISEA43H', 'ISEA4T', 'ISEA4D',
+    'ISEA3HS', 'ISEA4HS', 'ISEA7HS', 'ISEA43HS', 'ISEA4TS', 'ISEA4DS',
+    'ISEA3HL', 'ISEA4HL', 'ISEA7HL', 'ISEA43HL', 'ISEA4TL', 'ISEA4DL',
+    'IVEA3HS', 'IVEA4HS', 'IVEA7HS', 'IVEA43HS', 'IVEA4TS', 'IVEA4DS',
+    'IVEA3HL', 'IVEA4HL', 'IVEA7HL', 'IVEA43HL', 'IVEA4TL', 'IVEA4DL',
+    'FULLER3H', 'FULLER4H', 'FULLER7H', 'FULLER43H', 'FULLER4T', 'FULLER4D',
+) + dggs_types_hierarchical_v9
+
+output_address_types_v9 = ('GEO', 'Q2DI', 'SEQNUM', 'PLANE', 'Q2DD', 'PROJTRI', 'VERTEX2DD', 'HIERNDX')
+input_address_types_v9 = ('GEO', 'Q2DI', 'SEQNUM', 'Q2DD', 'PROJTRI', 'VERTEX2DD', 'HIERNDX')
+clip_subset_types_v9 = ('SHAPEFILE', 'WHOLE_EARTH', 'GDAL', 'AIGEN', 'COARSE_CELLS', 'COARSE_CELL_FILES', 'ADDRESS_FILES')
+
+# DGGRID 9.1 parameters that go to the metafile as given. dggrid4py sets the file names, delimiters, the operation
+# and the clipping by itself, and the parameters of Dggs and the address types have their own handling
+dggs_extra_fields_v9 = (
+    'bin_coverage', 'bin_method', 'cell_output_control', 'children_output_file_name', 'children_output_type',
+    'clip_type', 'clip_using_holes', 'custom_sphere_radius', 'dggs_aperture_sequence', 'dggs_aperture_type',
+    'dggs_base_poly', 'dggs_num_placements', 'dggs_orient_output_file_name', 'dggs_orient_preset',
+    'dggs_orient_rand_seed', 'dggs_orient_specify_type', 'dggs_res_specify_rnd_down', 'dggs_res_specify_type',
+    'hier_indexing_system_type', 'indexing_children_output_file_name', 'indexing_children_output_type',
+    'indexing_parent_output_file_name', 'indexing_parent_output_type', 'input_address_field_name',
+    'input_address_field_type', 'input_datum', 'input_value_field_name', 'kml_default_color', 'kml_default_width',
+    'kml_description', 'kml_name', 'longitude_wrap_mode', 'max_cells_per_output_file', 'neighbor_output_file_name',
+    'neighbor_output_type', 'orientation_datum', 'output_count', 'output_count_field_name', 'output_datum',
+    'output_file_type', 'output_first_seqnum', 'output_last_seqnum', 'output_mean', 'output_mean_field_name',
+    'output_num_classes', 'output_num_classes_field_name', 'output_presence_vector',
+    'output_presence_vector_field_name', 'output_total', 'output_total_field_name', 'point_input_file_type',
+    'point_input_gdal_format', 'polyclip_algo', 'randpts_concatenate_output', 'randpts_num_per_cell',
+    'randpts_output_file_name', 'randpts_output_type', 'randpts_seed', 'region_center_lat', 'region_center_lon',
+    'rng_type', 'sphere_radius_type', 'unwrap_points', 'verbosity', 'z3_invalid_digit',
+)
+
 DggridMetaConfigParameterT = str | float | int
 DggridMetaConfigT = TypedDict(
     "DggridMetaConfigT",
@@ -394,11 +437,25 @@ def __getattr__(name):  # for backward compatibility helper/warning
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
-def dgselect(dggs_type: DggsTypeT, **kwargs) -> "Dggs":
+def dgselect(dggs_type: DggsTypeT, minimal: bool = False, **kwargs) -> "Dggs":
     """
     helper function to create a DGGS config quickly
+
+    With ``minimal=True`` the config has only the given parameters and DGGRID takes everything else from its preset.
+    Otherwise the projection, aperture, topology and orientation are always written to the metafile, and these
+    override what a preset of DGGRID 9 defines (e.g. the orientation of IGEO7v2 or the Fuller projection).
     """
     dggs = None
+
+    if minimal:
+        if dggs_type not in dggs_types_v9:
+            raise ValueError(f"unknown dggs_type: '{dggs_type}', allowed are {list(dggs_types_v9)}")
+        dggs = Dggs(dggs_type=dggs_type, projection=None, aperture=None, topology=None, precision=None,
+                    azimuth_deg=None, pole_lat_deg=None, pole_lon_deg=None)
+        for res_opt in ['res', 'precision', 'area', 'spacing', 'cls_val', 'mixed_aperture_level']:
+            if kwargs.get(res_opt) is not None:
+                dggs.set_par(res_opt, kwargs[res_opt])
+        return dggs
 
     topo_dict = {
         'H' : 'HEXAGON',
@@ -522,6 +579,7 @@ def dg_grid_meta(dggs: "Dggs") -> DggridMetafileT:
     if dggs.dggs_type == 'CUSTOM':
         raise ValueError('custom not yet implemented')
     dggs_meta = dggs.to_dict()
+    dggs_meta.update(dggs.extra_params)
     dggs_meta.update(specify_resolution(**dggs_meta))
     dggs_meta.update(specify_topo_aperture(**dggs_meta))
     dggs_meta.update(specify_orient_type_args(**dggs_meta))
@@ -557,12 +615,15 @@ class Dggs:
     pole_lat_deg: DggsDegree = 58.28252559
     pole_lon_deg: DggsDegree = 11.25
     mixed_aperture_level: int | None = None
+    # further DGGRID parameters for the metafile, as {parameter: value}
+    extra_params: dict[str, DggridMetaConfigParameterT] = dataclasses.field(default_factory=dict)
 
     _hide_metafile = [
         'metric',
         'show_info',
         'resround',
         'spacing',
+        'extra_params',
         '_aliases',
     ]
 
@@ -677,6 +738,11 @@ class DGGRID(abc.ABC):
 
     It must be instantiated by one of its specific version to validate respective fields.
     """
+    # clip_subset_type for a list of cell ids, ADDRESS_FILES since DGGRID 9
+    address_clip_subset_type = 'INPUT_ADDRESS_TYPE'
+    # DGGRID's lon/lat are always read as EPSG:4326, also if the file declares DGGRID's sphere
+    force_geo_crs_4326 = True
+
     def __init__(self, executable = 'dggrid',
                  working_dir = None,
                  capture_logs=True,
@@ -810,7 +876,7 @@ class DGGRID(abc.ABC):
                 if col in gdf.columns:
                     gdf = gdf.rename(columns={col: 'name'})
                     break
-        return gdf.set_crs(4326, allow_override=True)
+        return gdf.set_crs(4326, allow_override=True) if self.force_geo_crs_4326 else gdf
 
     def check_gdal_support(self):
         if self.has_gdal:
@@ -860,6 +926,17 @@ class DGGRID(abc.ABC):
             self._dggrid_version = _read_dggrid_version(executable)
             self._dggrid_version_of = executable
         return self._dggrid_version
+
+
+    def _select_dggs(self, dggs_type, resolution, mixed_aperture_level, conf_extra) -> Dggs:
+        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs.update(**conf_extra, strict=True)
+        return dggs
+
+
+    def _stats_dggs_type(self, dggs_type):
+        # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
+        return 'ISEA7H' if dggs_type == 'IGEO7' else dggs_type
 
 
     def _metafile_for_executable(self, dggs_meta_ops):
@@ -967,7 +1044,7 @@ class DGGRID(abc.ABC):
             elif subset_conf['clip_subset_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GDAL'] and not subset_conf['clip_region_files'] is None:
                 metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                 metafile.append("clip_region_files " + subset_conf['clip_region_files'])
-            elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE'] and not subset_conf['clip_region_files'] is None:
+            elif subset_conf['clip_subset_type'] in [ 'SEQNUMS', 'COARSE_CELLS', 'INPUT_ADDRESS_TYPE', 'ADDRESS_FILES'] and not subset_conf['clip_region_files'] is None:
                 if not dggs.dggs_type in ['PLANETRISK']:
                     # metafile.append("clip_subset_type " + subset_conf['clip_subset_type'])
                     # metafile.append("clip_region_files " + subset_conf['clip_region_files'])
@@ -1017,7 +1094,7 @@ class DGGRID(abc.ABC):
                 output_conf['cell_output_type'] in [ 'SHAPEFILE' , 'AIGEN', 'GEOJSON', 'TEXT']
                 and output_conf['cell_output_file_name'] is not None
             ):
-                if self.version == 8 and output_conf['cell_output_type'] == 'SHAPEFILE':
+                if self.version >= 8 and output_conf['cell_output_type'] == 'SHAPEFILE':
                     output_conf.setdefault('shapefile_id_field_length', 50)
                 for elem in filter(lambda x: x.startswith('cell_output_') , output_conf.keys()):
                     metafile.append(f"{elem} " + str(output_conf[elem]))
@@ -1441,9 +1518,7 @@ class DGGRID(abc.ABC):
         """
         generates the area and cell statistics for the given DGGS from resolution 0 to the given resolution of the DGGS
         """
-        # IGEO7 has the same cells as ISEA7H, and DGGRID 8.42 fails on OUTPUT_STATS with the IGEO7 preset
-        stats_dggs_type = 'ISEA7H' if dggs_type == 'IGEO7' else dggs_type
-        dggs = dgselect(dggs_type = stats_dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
+        dggs = self._select_dggs(self._stats_dggs_type(dggs_type), resolution, mixed_aperture_level, {})
 
         dggs_ops = self.dgapi_grid_stats(dggs)
         if self.debug:
@@ -1477,8 +1552,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1543,8 +1617,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1614,14 +1687,14 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
                                                                clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
+                                                               resolution=resolution, seqnums_clip=self.version == 7,
+                                                               address_clip_subset_type=self.address_clip_subset_type, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1703,14 +1776,14 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         seq_df = None
         clip_metafile_settings, seq_df = specify_clip_settings(clip_subset_type, tmp_dir, tmp_id, input_address_type=input_address_type,
                                                                clip_cell_res=clip_cell_res, cell_id_list=cell_id_list,
-                                                               resolution=resolution, seqnums_clip=self.version == 7, **conf_extra)
+                                                               resolution=resolution, seqnums_clip=self.version == 7,
+                                                               address_clip_subset_type=self.address_clip_subset_type, **conf_extra)
         subset_conf.update(clip_metafile_settings)
         subset_conf.update(specify_resolution(**conf_extra))
         subset_conf.update(specify_orient_type_args(**conf_extra))
@@ -1787,8 +1860,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         subset_conf: DggridMetaConfigT = {}
         clipper_metafile_settings, _ = specify_clip_settings(tmp_dir=tmp_dir, tmp_id=tmp_id, tmp_geo_out=self.tmp_geo_out,
@@ -1852,8 +1924,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         # work on a copy, the caller's GeoDataFrame stays as it is
         geodf_points_wgs84 = geodf_points_wgs84.copy()
@@ -1927,6 +1998,7 @@ class DGGRID(abc.ABC):
                 input_address_type=new_input_address_type,
                 output_address_type=output_address_type,
                 **dggs_conf,  # ensure any extra parameters are passed on
+                **dggs.extra_params,
                 **address_extras,
             )
             # avoid conflict between input 'name' column and generated 'name' Zone ID
@@ -1967,8 +2039,7 @@ class DGGRID(abc.ABC):
         output_address_type = self.resolve_address_type('output', output_address_type, conf_extra)
         tmp_id = uuid.uuid4()
         tmp_dir = self.working_dir
-        dggs = dgselect(dggs_type = dggs_type, res= resolution, mixed_aperture_level=mixed_aperture_level)
-        dggs.update(**conf_extra, strict=True)
+        dggs = self._select_dggs(dggs_type, resolution, mixed_aperture_level, conf_extra)
 
         if cell_id_list is None or len(cell_id_list) <= 0:
             raise ValueError("Expecting cell_id_list to transform.")
@@ -2018,7 +2089,7 @@ class DGGRIDv7(DGGRID):
     .. deprecated:: 0.6.0
         Use :class:`DGGRIDv8` with DGGRID 8.42 or newer. The address types of this class (e.g. ``Z7_STRING``) and its
         clipping by sequence numbers are removed in DGGRID 9. ``DGGRIDv8`` maps the former address type names with a
-        ``DeprecationWarning``. This class will be removed in a future version.
+        ``DeprecationWarning``. This class will be removed in version 0.8.0.
     """
     version = 7
     output_address_types: DggsOutputAddressTypeV7T = output_address_types_v7
@@ -2028,7 +2099,7 @@ class DGGRIDv7(DGGRID):
 
     def __init__(self, *args, **kwargs):
         warnings.warn(
-            "DGGRIDv7 is deprecated since dggrid4py 0.6.0 and will be removed in a future version, "
+            "DGGRIDv7 is deprecated since dggrid4py 0.6.0 and will be removed in version 0.8.0, "
             "use DGGRIDv8 with DGGRID 8.42 or newer (it maps the former address types like 'Z7_STRING')",
             DeprecationWarning,
             stacklevel=2,
@@ -2039,12 +2110,168 @@ class DGGRIDv7(DGGRID):
 class DGGRIDv8(DGGRID):
     """
     Parameter handling for DGGRID 8, for the classical DGGS types as well as for IGEO7 with the Z7 index.
+
+    It also runs with DGGRID 9.1 and returns the same grids as with DGGRID 8. :class:`DGGRIDv9` gives access to the new
+    DGGS types and parameters of DGGRID 9.1.
     """
     version = 8
     output_address_types: DggsOutputAddressTypeV8T = output_address_types_v8
     output_extra_fields = output_extra_fields_v8
     input_address_types: DggsInputAddressTypeV8T = input_address_types_v8
     input_extra_fields = input_extra_fields_v8
+
+
+# handled by the functions of the DGGRID class itself: address types, their fields and the clipping details
+_v9_handled_params = (
+    'input_address_type', 'input_hier_ndx_system', 'input_hier_ndx_form',
+    'output_address_type', 'output_hier_ndx_system', 'output_hier_ndx_form',
+    'output_cell_label_type', 'shapefile_id_field_length', 'clip_cell_densification', 'clipper_scale_factor',
+)
+
+
+class DGGRIDv9(DGGRID):
+    """
+    Parameter handling for DGGRID 9.1 or newer.
+
+    In contrast to :class:`DGGRIDv8`, only the parameters that are given and that the operation needs are written to
+    the metafile, everything else comes from the preset of DGGRID. A parameter that DGGRID 9.1 does not know raises a
+    ``ValueError``, and the coordinate reference system of the output is the one that DGGRID declares.
+    """
+    version = 9
+    output_address_types = output_address_types_v9
+    output_extra_fields = output_extra_fields_v8
+    input_address_types = input_address_types_v9
+    input_extra_fields = input_extra_fields_v8
+    dggs_extra_fields = dggs_extra_fields_v9
+    address_clip_subset_type = 'ADDRESS_FILES'
+    force_geo_crs_4326 = False
+
+    def run(self, dggs_meta_ops):
+        version = self.dggrid_version
+        if version is not None and version < (9, 1):
+            raise ValueError(
+                f"DGGRIDv9 needs DGGRID 9.1 or newer, {self.executable} is version {version[0]}.{version[1]}, "
+                "use DGGRIDv8 with this version"
+            )
+        return super().run(dggs_meta_ops)
+
+    def _select_dggs(self, dggs_type, resolution, mixed_aperture_level, conf_extra) -> Dggs:
+        dggs = dgselect(dggs_type, minimal=True, res=resolution, mixed_aperture_level=mixed_aperture_level)
+        conf_extra = self._resolve_deprecated_params(conf_extra)
+        for param, value in conf_extra.items():
+            if param in self.dggs_extra_fields:
+                dggs.extra_params[param] = str(value).upper() if isinstance(value, bool) else value
+            elif dggs._resolve_key(param, strict=True) is not None:
+                dggs.update(**{param: value}, strict=True)
+            elif param not in _v9_handled_params:
+                raise ValueError(
+                    f"'{param}' can't be used with DGGRIDv9: it is not a parameter of DGGRID 9.1, "
+                    "or dggrid4py sets it by itself"
+                )
+        return dggs
+
+    @staticmethod
+    def _resolve_deprecated_params(conf_extra):
+        # as DGGRID 9.1 itself does it, but with a warning that also shows up in Python
+        conf_extra = dict(conf_extra)
+        if 'proj_datum_radius' in conf_extra:
+            warnings.warn("proj_datum_radius is deprecated, use custom_sphere_radius", DeprecationWarning, stacklevel=4)
+            conf_extra.setdefault('custom_sphere_radius', conf_extra.pop('proj_datum_radius'))
+        if 'proj_datum' in conf_extra:
+            warnings.warn("proj_datum is deprecated, use sphere_radius_type", DeprecationWarning, stacklevel=4)
+            datum = str(conf_extra.pop('proj_datum')).upper()
+            if datum == 'WGS84_AUTHALIC_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'AUTHALIC_SPHERE')
+            elif datum == 'CUSTOM_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'CUSTOM_SPHERE')
+            elif datum == 'WGS84_MEAN_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'CUSTOM_SPHERE')
+                conf_extra.setdefault('custom_sphere_radius', 6371.00877141505983)
+            else:
+                raise ValueError(f"invalid value '{datum}' for the deprecated parameter proj_datum")
+        return conf_extra
+
+    def _stats_dggs_type(self, dggs_type):
+        return dggs_type
+
+    def _metafile_for_executable(self, dggs_meta_ops):
+        # the same grid, but without the warning of DGGRID 9.1 about the alias in the logs
+        return ['dggs_type IGEO7v2' if line == 'dggs_type IGEO7' else line for line in dggs_meta_ops]
+
+    def _preset_address_type(self, dggs_type):
+        return 'HIERNDX' if dggs_type in dggs_types_hierarchical_v9 else 'SEQNUM'
+
+    def _extent_address_type(self, dggs_type, output_address_type):
+        # for a hierarchical preset the address type has to be in the metafile, DGGRIDv8 and DGGRIDv9 write
+        # the fields of the index (e.g. output_hier_ndx_form) only together with it
+        if output_address_type is None and dggs_type in dggs_types_hierarchical_v9:
+            return 'HIERNDX'
+        return output_address_type
+
+    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                      split_dateline=False, output_address_type=None, **conf_extra):
+        return super().grid_cell_polygons_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom, split_dateline,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cell_centroids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                       output_address_type=None, **conf_extra):
+        return super().grid_cell_centroids_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                output_address_type=None, **conf_extra):
+        return super().grid_cellids_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                                        split_dateline=False, clip_subset_type='WHOLE_EARTH', clip_cell_res=1,
+                                        input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.grid_cell_polygons_from_cellids`, but the cell ids have the form of the preset by default:
+        ``HIERNDX`` for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().grid_cell_polygons_from_cellids(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level, split_dateline, clip_subset_type, clip_cell_res,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
+
+    def grid_cell_centroids_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                                         clip_subset_type='WHOLE_EARTH', clip_cell_res=1,
+                                         input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.grid_cell_centroids_from_cellids`, but the cell ids have the form of the preset by default:
+        ``HIERNDX`` for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().grid_cell_centroids_from_cellids(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level, clip_subset_type, clip_cell_res,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
+
+    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None,
+                             split_dateline=False, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.cells_for_geo_points`, but the cell ids have the form of the preset by default: ``HIERNDX``
+        for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``. How the coordinates are read depends
+        on the preset: geodetic latitudes for an ellipsoidal preset (e.g. IGEO7 or ISEA7HL), and latitudes on the
+        authalic sphere for a spherical one (e.g. ISEA7H or IGEO7v1).
+        """
+        return super().cells_for_geo_points(
+            geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level, split_dateline,
+            output_address_type or self._preset_address_type(dggs_type), **conf_extra)
+
+    def address_transform(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                          input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.address_transform`, but the address types are the form of the preset by default: ``HIERNDX``
+        for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().address_transform(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
 
 
 class AnyDGGRID(DGGRID):
@@ -2285,6 +2512,7 @@ def specify_clip_settings(
     cell_id_list: list = None,
     resolution: int = 9,
     seqnums_clip: bool = False,
+    address_clip_subset_type: DggsClipSubsetTypeT = 'INPUT_ADDRESS_TYPE',
     **conf_extra: DggridMetaConfigParameterT,
 ) -> DggridMetaConfigT:
 
@@ -2306,7 +2534,7 @@ def specify_clip_settings(
             # clip_subset_type SEQNUMS is the DGGRID 7 form, it is removed in DGGRID 9
             clip_metafile_settings.update({'clip_subset_type': 'SEQNUMS'})
         else:
-            clip_metafile_settings.update({'clip_subset_type': 'INPUT_ADDRESS_TYPE'})
+            clip_metafile_settings.update({'clip_subset_type': address_clip_subset_type})
             clip_metafile_settings.update({'input_address_type': input_address_type})
             if (clip_subset_type == "COARSE_CELLS"):
                 clip_metafile_settings.update({'clip_subset_type': 'COARSE_CELLS'})

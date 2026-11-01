@@ -8,7 +8,7 @@
 # Date: 07-12-2022 
 #
 
-from .dggrid_runner import DGGRIDv7, DGGRIDv8, Dggs, dgselect, dggs_types
+from .dggrid_runner import DGGRIDv7, DGGRIDv8, DGGRIDv9, Dggs, dgselect, dggs_types, dggs_types_v9
 import dggrid4py.igeo7 as igeo7
 import dggrid4py.tool as tool
 from .auxlat import geoseries_to_authalic, geoseries_to_geodetic, geodetic_to_authalic, authalic_to_geodetic
