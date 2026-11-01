@@ -2154,6 +2154,7 @@ class DGGRIDv9(DGGRID):
 
     def _select_dggs(self, dggs_type, resolution, mixed_aperture_level, conf_extra) -> Dggs:
         dggs = dgselect(dggs_type, minimal=True, res=resolution, mixed_aperture_level=mixed_aperture_level)
+        conf_extra = self._resolve_deprecated_params(conf_extra)
         for param, value in conf_extra.items():
             if param in self.dggs_extra_fields:
                 dggs.extra_params[param] = str(value).upper() if isinstance(value, bool) else value
@@ -2165,6 +2166,27 @@ class DGGRIDv9(DGGRID):
                     "or dggrid4py sets it by itself"
                 )
         return dggs
+
+    @staticmethod
+    def _resolve_deprecated_params(conf_extra):
+        # as DGGRID 9.1 itself does it, but with a warning that also shows up in Python
+        conf_extra = dict(conf_extra)
+        if 'proj_datum_radius' in conf_extra:
+            warnings.warn("proj_datum_radius is deprecated, use custom_sphere_radius", DeprecationWarning, stacklevel=4)
+            conf_extra.setdefault('custom_sphere_radius', conf_extra.pop('proj_datum_radius'))
+        if 'proj_datum' in conf_extra:
+            warnings.warn("proj_datum is deprecated, use sphere_radius_type", DeprecationWarning, stacklevel=4)
+            datum = str(conf_extra.pop('proj_datum')).upper()
+            if datum == 'WGS84_AUTHALIC_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'AUTHALIC_SPHERE')
+            elif datum == 'CUSTOM_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'CUSTOM_SPHERE')
+            elif datum == 'WGS84_MEAN_SPHERE':
+                conf_extra.setdefault('sphere_radius_type', 'CUSTOM_SPHERE')
+                conf_extra.setdefault('custom_sphere_radius', 6371.00877141505983)
+            else:
+                raise ValueError(f"invalid value '{datum}' for the deprecated parameter proj_datum")
+        return conf_extra
 
     def _stats_dggs_type(self, dggs_type):
         return dggs_type

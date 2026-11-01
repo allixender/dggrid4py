@@ -253,3 +253,28 @@ def test_v9_bool_parameter_upper_case():
     dggrid = _dggrid91()
     dggrid.grid_cellids_for_extent("ISEA7HL", 6, clip_geom=TARTU_BOX, clip_using_holes=True)
     assert "clip_using_holes TRUE" in dggrid.last_ops_meta
+
+
+@pytest.mark.parametrize("datum, expected", [
+    ("WGS84_AUTHALIC_SPHERE", {"sphere_radius_type": "AUTHALIC_SPHERE"}),
+    ("CUSTOM_SPHERE", {"sphere_radius_type": "CUSTOM_SPHERE"}),
+    ("WGS84_MEAN_SPHERE", {"sphere_radius_type": "CUSTOM_SPHERE", "custom_sphere_radius": 6371.00877141505983}),
+])
+def test_v9_proj_datum_deprecated(datum, expected):
+    dggrid = DGGRIDv9(executable="dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    with pytest.warns(DeprecationWarning, match="use sphere_radius_type"):
+        dggs = dggrid._select_dggs("ISEA7HS", 5, None, {"proj_datum": datum})
+    assert dggs.extra_params == expected
+
+
+def test_v9_proj_datum_invalid():
+    dggrid = DGGRIDv9(executable="dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="proj_datum"):
+        dggrid._select_dggs("ISEA7HS", 5, None, {"proj_datum": "MARS"})
+
+
+def test_v9_proj_datum_runs():
+    dggrid = _dggrid91()
+    with pytest.warns(DeprecationWarning):
+        dggrid.grid_cellids_for_extent("ISEA7HS", 2, proj_datum="WGS84_AUTHALIC_SPHERE")
+    assert "sphere_radius_type AUTHALIC_SPHERE" in dggrid.last_ops_meta
