@@ -354,3 +354,19 @@ def test_extent_outputs_have_name_and_crs():
 def test_dgselect_unknown_dggs_type():
     with pytest.raises(ValueError, match="unknown dggs_type: 'ISEA5H'"):
         dgselect("ISEA5H", res=3)
+
+
+def test_address_transform_same_address_type_keeps_input():
+    dggrid = _dggrid()
+    digits = ["00010224545", "00641565463"]
+    hexa = dggrid.address_transform(
+        digits, "IGEO7", 9,
+        input_address_type="HIERNDX", output_address_type="HIERNDX",
+        input_hier_ndx_system="Z7", input_hier_ndx_form="DIGIT_STRING",
+        output_hier_ndx_system="Z7", output_hier_ndx_form="INT64",
+        output_cell_label_type="OUTPUT_ADDRESS_TYPE",
+    )
+    assert list(hexa.columns) == ["HIERNDX_input", "HIERNDX"]
+    assert hexa["HIERNDX_input"].tolist() == digits
+    # 16 hex characters, not the input form
+    assert hexa["HIERNDX"].str.len().tolist() == [16, 16]

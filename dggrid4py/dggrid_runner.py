@@ -2009,7 +2009,8 @@ class DGGRID(abc.ABC):
         """
             generates the DGGS for the input cell_ids and returns all the transformed cell_ids
             cell_id_list is a list/numpy array, takes this list as seqnums ids (potentially also Z3, Z7, or ZORDER)
-            the columns of the returned DataFrame are named after the given input and output address types
+            the columns of the returned DataFrame are named after the given input and output address types. If both
+            are the same (e.g. HIERNDX from INT64 to DIGIT_STRING), the input cell ids are in the column '<type>_input'
         """
         # column names as given by the caller, also if a DGGRIDv7 name is mapped to HIERNDX
         input_column, output_column = input_address_type, output_address_type
@@ -2049,8 +2050,11 @@ class DGGRID(abc.ABC):
 
         df = pd.read_csv( dggs_ops['output_conf']['output_file_name'] , header=None, dtype={0:'str', 1:'str'})
         df = df.dropna()
-        seq_df[output_address_type] = df.iloc[:,0]
-        seq_df = seq_df.rename(columns={input_address_type: input_column, output_address_type: output_column})
+        if input_column == output_column:
+            # e.g. HIERNDX in another form, the input ids would be overwritten otherwise
+            input_column = f"{input_column}_input"
+        seq_df = seq_df.rename(columns={input_address_type: input_column})
+        seq_df[output_column] = df.iloc[:,0]
 
         if not self.debug:
             try:
