@@ -457,3 +457,10 @@ def test_run_missing_executable_returns_minus_one():
     dggrid = DGGRIDv8(executable="/does/not/exist/dggrid", working_dir=tempfile.mkdtemp(), silent=True)
     assert dggrid.run(["dggrid_operation OUTPUT_STATS"]) == -1
     assert not dggrid.last_run_successful
+
+
+def test_grid_stats_table_keeps_decimals_at_high_resolution():
+    # reported as rounded on Windows, https://github.com/allixender/dggrid4py/issues/20
+    stats = _dggrid().grid_stats_table("ISEA3H", 20)
+    assert stats["Area (km^2)"].iloc[20] == pytest.approx(0.0146285, rel=1e-3)
+    assert stats["CLS (km)"].iloc[20] == pytest.approx(0.136476, rel=1e-3)
