@@ -68,8 +68,8 @@ def _sha256(path):
 
 
 def _make_executable(path):
-    current_permissions = os.stat(path).st_mode
-    os.chmod(path, current_permissions | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    path = Path(path)
+    path.chmod(path.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def _release_checksum(release, asset, folder):
@@ -120,15 +120,15 @@ def download_executable(url, folder="./"):
     """
     Download a single executable file into folder and return its absolute path.
     """
-    os.makedirs(folder, exist_ok=True)
+    Path(folder).mkdir(parents=True, exist_ok=True)
 
     filename = url.split('/')[-1]
-    local_path = os.path.join(folder, filename)
+    local_path = str(Path(folder) / filename)
 
     _fetch(url, local_path)
     _make_executable(local_path)
 
-    return os.path.abspath(local_path)
+    return str(Path(local_path).absolute())
 
 
 def portable_release(line=DEFAULT_LINE):
