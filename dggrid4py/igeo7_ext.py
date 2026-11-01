@@ -11,6 +11,7 @@ All wrappers apply the current IGEO7 best practice and return the same cell iden
 """
 from pathlib import Path
 import copy
+import logging
 import math
 import warnings
 
@@ -25,6 +26,8 @@ from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic, trans
 from dggrid4py.dggrid_runner import DGGRIDv8, DGGRIDv9
 
 IGEO7_VERT0_LON = 11.20
+
+logger = logging.getLogger(__name__)
 
 _legacy_address_types = {'Z7_STRING': 'DIGIT_STRING', 'Z7': 'INT64'}
 
@@ -338,10 +341,9 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m=None, stricter_clip=Tru
 
 
 def suggest_window_blocks_per_chunk(rs_src, mem_use_mb):
-    print("########### suggest window blocks for mem use ##########")
     shapes = []
     for bs in rs_src.block_shapes:
-        print("block shapes:" + str(bs))
+        logger.info("block shapes: %s", bs)
         shapes.append(bs)
     block_shape = shapes[0]
 
@@ -352,10 +354,9 @@ def suggest_window_blocks_per_chunk(rs_src, mem_use_mb):
     proposed_squared_window_blocks = int(math.floor(base_num_blocks))
     baselength = base_num_blocks * block_shape[0]
     
-    print(
-        "suggested window_blocks per chunk -> {} (max number pixels of chuck side {} for {} mb in-mem use)".format(
-            proposed_squared_window_blocks, baselength, mem_use_mb
-        )
+    logger.info(
+        "suggested window_blocks per chunk -> %s (max number pixels of chuck side %s for %s mb in-mem use)",
+        proposed_squared_window_blocks, baselength, mem_use_mb,
     )
     return proposed_squared_window_blocks
 
@@ -528,8 +529,9 @@ def propose_dggs_level_for_pixel_length(dggrid_instance, pixel_edge_len, pix_siz
             resolution = idx
             break
 
-    print(
-        f"pixel_edge_len: {pixel_edge_len} - resolution: {resolution} - {dggrid_dggs} cls_m: {cls_m} m - avg cell_size: {average_hexagon_area_m2} m2"
+    logger.info(
+        "pixel_edge_len: %s - resolution: %s - %s cls_m: %s m - avg cell_size: %s m2",
+        pixel_edge_len, resolution, dggrid_dggs, cls_m, average_hexagon_area_m2,
     )
 
     return {'resolution': resolution, 'cls_m': cls_m, 'average_hexagon_area_m2': average_hexagon_area_m2}

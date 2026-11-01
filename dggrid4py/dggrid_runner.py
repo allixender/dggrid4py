@@ -14,11 +14,10 @@ import dataclasses
 import decimal
 import uuid
 import shutil
+import logging
 import os
 import re
-import sys
 import subprocess
-import traceback
 import tempfile
 import warnings
 from pathlib import Path
@@ -35,6 +34,8 @@ from geopandas.base import GeometryArray
 from shapely.geometry.base import BaseGeometry  # noqa
 
 AnyGeometry = BaseGeometry | GeometryArray
+
+logger = logging.getLogger(__name__)
 
 
 # Cache pyogrio drivers for get_geo_out() function
@@ -901,7 +902,7 @@ class DGGRID(abc.ABC):
             takes.append(take_2)
 
         if len(takes) < 1:
-            print(f"{self.executable} not in executable paths")
+            logger.warning("%s not in executable paths", self.executable)
         else:
             for elem in takes:
                 swx = Path(elem)
@@ -980,11 +981,14 @@ class DGGRID(abc.ABC):
                 o = subprocess.run(command, cwd=working_dir, stdout=stdout, stderr=subprocess.STDOUT)
                 if self.capture_logs:
                     logs = [line.strip() for line in o.stdout.decode(errors='replace').splitlines()]
+                    for line in logs:
+                        logger.debug(line)
             else:
                 with subprocess.Popen(command, cwd=working_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT) as o:
                     for b_line in o.stdout:
                         line = b_line.decode(errors='replace').strip()
                         print(line)
+                        logger.debug(line)
                         if self.capture_logs:
                             logs.append(line)
 
@@ -1005,8 +1009,7 @@ class DGGRID(abc.ABC):
 
         except Exception as e:
             self.last_run_successful = False
-            print(repr(e))
-            traceback.print_exc(file=sys.stdout)
+            logger.exception("running %s failed", self.executable)
             self.last_run_logs = repr(e)
 
         if not o:
@@ -2484,7 +2487,7 @@ def specify_topo_aperture(
     if dggs_aperture_type == 'PURE':
         if dggs_topology_type == 'HEXAGON':
             if not dggs_aperture in [3, 4, 7]:
-                print(f"combo not possible / {dggs_topology_type} {dggs_aperture} / setting 3H")
+                logger.warning("combo not possible / %s %s / setting 3H", dggs_topology_type, dggs_aperture)
                 return {
                     '#short_name': "3H",
                     'dggs_topology': dggs_topology_type,
@@ -2501,7 +2504,7 @@ def specify_topo_aperture(
 
         if dggs_topology_type in ['TRIANGLE', 'DIAMOND']:
             if not dggs_aperture == 4:
-                print(f"combo not possible / {dggs_topology_type} {dggs_aperture} / setting 4{dggs_topology_type[0]}")
+                logger.warning("combo not possible / %s %s / setting 4%s", dggs_topology_type, dggs_aperture, dggs_topology_type[0])
                 return {
                     '#short_name': f"4{dggs_topology_type[0]}",
                     'dggs_topology': dggs_topology_type,

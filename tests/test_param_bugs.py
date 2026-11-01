@@ -486,3 +486,19 @@ def test_authalic_conversion_keeps_structure_of_geometry():
     assert converted.iloc[1].z == 42.0
     assert len(converted.iloc[2].interiors) == 1
     assert converted.iloc[0].equals_exact(shapely.Point(26.72, float(geodetic_to_authalic(58.37))), 1e-12)
+
+
+def test_logger_gets_dggrid_output_and_failures(caplog):
+    import logging
+
+    path = _dggrid_path()
+    dggrid = DGGRIDv8(executable=path, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
+    with caplog.at_level(logging.DEBUG, logger="dggrid4py"):
+        assert dggrid.run(["dggrid_operation OUTPUT_STATS", "dggs_type ISEA7H", "dggs_res_spec 2"]) == 0
+    assert any("Earth Radius" in record.getMessage() for record in caplog.records)
+
+    caplog.clear()
+    missing = DGGRIDv8(executable="/does/not/exist/dggrid", working_dir=tempfile.mkdtemp(), silent=True)
+    with caplog.at_level(logging.ERROR, logger="dggrid4py"):
+        assert missing.run(["dggrid_operation OUTPUT_STATS"]) == -1
+    assert any("failed" in record.getMessage() for record in caplog.records)
