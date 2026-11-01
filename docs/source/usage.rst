@@ -17,8 +17,11 @@ dggrid4py from PyPI, so you don't need to compile anything.
 
    $ pixi init my-dggs-project -c conda-forge
    $ cd my-dggs-project
+   $ printf '\n[system-requirements]\nmacos = "13.3"\n' >> pixi.toml   # only on macOS
    $ pixi add python=3.12 dggrid geopandas pyogrio
    $ pixi add --pypi dggrid4py
+
+The system requirement is needed on macOS, because DGGRID 9.1 from conda-forge depends on macOS 13.3 or newer through GDAL, while pixi assumes an older version by default. Without it, pixi installs DGGRID 8.44 without an error, and the ``DGGRIDv9`` class raises a ``ValueError``. Newer versions of pixi warn that this table is deprecated, which can be ignored for now.
 
 ``dggrid4py`` pulls in ``pygeodesy`` from PyPI (it is not available on conda-forge).
 This installs the current DGGRID version from conda-forge, which is DGGRID 9.1 at the moment; this needs the
