@@ -2118,6 +2118,58 @@ class DGGRIDv8(DGGRID):
     input_extra_fields = input_extra_fields_v8
 
 
+# handled by the functions of the DGGRID class itself: address types, their fields and the clipping details
+_v9_handled_params = (
+    'input_address_type', 'input_hier_ndx_system', 'input_hier_ndx_form',
+    'output_address_type', 'output_hier_ndx_system', 'output_hier_ndx_form',
+    'output_cell_label_type', 'shapefile_id_field_length', 'clip_cell_densification', 'clipper_scale_factor',
+)
+
+
+class DGGRIDv9(DGGRID):
+    """
+    Parameter handling for DGGRID 9.1 or newer.
+
+    In contrast to :class:`DGGRIDv8`, only the parameters that are given and that the operation needs are written to
+    the metafile, everything else comes from the preset of DGGRID. A parameter that DGGRID 9.1 does not know raises a
+    ``ValueError``, and the coordinate reference system of the output is the one that DGGRID declares.
+    """
+    version = 9
+    output_address_types = output_address_types_v9
+    output_extra_fields = output_extra_fields_v8
+    input_address_types = input_address_types_v9
+    input_extra_fields = input_extra_fields_v8
+    dggs_extra_fields = dggs_extra_fields_v9
+    address_clip_subset_type = 'ADDRESS_FILES'
+    force_geo_crs_4326 = False
+
+    def run(self, dggs_meta_ops):
+        version = self.dggrid_version
+        if version is not None and version < (9, 1):
+            raise ValueError(
+                f"DGGRIDv9 needs DGGRID 9.1 or newer, {self.executable} is version {version[0]}.{version[1]}, "
+                "use DGGRIDv8 with this version"
+            )
+        return super().run(dggs_meta_ops)
+
+    def _select_dggs(self, dggs_type, resolution, mixed_aperture_level, conf_extra) -> Dggs:
+        dggs = dgselect(dggs_type, minimal=True, res=resolution, mixed_aperture_level=mixed_aperture_level)
+        for param, value in conf_extra.items():
+            if param in self.dggs_extra_fields:
+                dggs.extra_params[param] = value
+            elif dggs._resolve_key(param, strict=True) is not None:
+                dggs.update(**{param: value}, strict=True)
+            elif param not in _v9_handled_params:
+                raise ValueError(
+                    f"'{param}' can't be used with DGGRIDv9: it is not a parameter of DGGRID 9.1, "
+                    "or dggrid4py sets it by itself"
+                )
+        return dggs
+
+    def _stats_dggs_type(self, dggs_type):
+        return dggs_type
+
+
 class AnyDGGRID(DGGRID):
     version = 0
     output_address_types: DggsOutputAddressTypeT = list(set(output_address_types_v7) | set(output_address_types_v8))
