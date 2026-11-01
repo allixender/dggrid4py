@@ -2156,7 +2156,7 @@ class DGGRIDv9(DGGRID):
         dggs = dgselect(dggs_type, minimal=True, res=resolution, mixed_aperture_level=mixed_aperture_level)
         for param, value in conf_extra.items():
             if param in self.dggs_extra_fields:
-                dggs.extra_params[param] = value
+                dggs.extra_params[param] = str(value).upper() if isinstance(value, bool) else value
             elif dggs._resolve_key(param, strict=True) is not None:
                 dggs.update(**{param: value}, strict=True)
             elif param not in _v9_handled_params:
@@ -2168,6 +2168,10 @@ class DGGRIDv9(DGGRID):
 
     def _stats_dggs_type(self, dggs_type):
         return dggs_type
+
+    def _metafile_for_executable(self, dggs_meta_ops):
+        # the same grid, but without the warning of DGGRID 9.1 about the alias in the logs
+        return ['dggs_type IGEO7v2' if line == 'dggs_type IGEO7' else line for line in dggs_meta_ops]
 
     def _preset_address_type(self, dggs_type):
         return 'HIERNDX' if dggs_type in dggs_types_hierarchical_v9 else 'SEQNUM'

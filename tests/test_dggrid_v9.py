@@ -206,3 +206,50 @@ def test_v9_cellids_for_extent_hierarchical_form():
     dggrid = _dggrid91()
     cells = dggrid.grid_cellids_for_extent("IGEO7", 6, clip_geom=TARTU_BOX, output_hier_ndx_form="DIGIT_STRING")
     assert all(len(name) == 8 for name in cells[0])
+
+
+def test_v9_igeo7_runs_as_igeo7v2_without_log_warning():
+    dggrid = _dggrid91()
+    result = dggrid.grid_cellids_for_extent("IGEO7", 6, clip_geom=TARTU_BOX)
+    assert "dggs_type IGEO7v2" in dggrid.last_ops_meta
+    assert "alias" not in dggrid.last_run_logs
+    assert len(result) > 0
+
+
+@pytest.mark.parametrize("dggs_type, is_epsg4326", [("IGEO7", True), ("ISEA7HL", True), ("ISEA7H", False), ("IGEO7v1", False)])
+def test_v9_keeps_crs_declared_by_dggrid(dggs_type, is_epsg4326):
+    dggrid = _dggrid91()
+    cells = dggrid.grid_cell_polygons_for_extent(dggs_type, 2)
+    centroids = dggrid.grid_cell_centroids_for_extent(dggs_type, 2)
+    assert cells.crs is not None and centroids.crs is not None
+    assert (cells.crs.to_epsg() == 4326) == is_epsg4326
+    assert (centroids.crs.to_epsg() == 4326) == is_epsg4326
+
+
+def test_v8_still_forces_epsg4326():
+    path = _dggrid91().executable
+    v8 = DGGRIDv8(executable=path, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
+    assert v8.grid_cell_polygons_for_extent("ISEA7H", 2).crs.to_epsg() == 4326
+
+
+def test_v9_fuller_is_dymaxion_and_isea_orientation_gives_v8_ids():
+    dggrid = _dggrid91()
+    v8 = DGGRIDv8(executable=dggrid.executable, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
+    v8_ids = v8.cells_for_geo_points(_points(), True, "FULLER7H", 7, output_address_type="SEQNUM")["name"].tolist()
+    v9_ids = dggrid.cells_for_geo_points(_points(), True, "FULLER7H", 7)["name"].tolist()
+    v9_isea = dggrid.cells_for_geo_points(_points(), True, "FULLER7H", 7, dggs_orient_preset="ISEA")["name"].tolist()
+    assert v9_ids != v8_ids
+    assert v9_isea == v8_ids
+
+
+def test_v9_vert0_from_caller_still_used():
+    dggrid = _dggrid91()
+    dggrid.grid_cellids_for_extent("ISEA7HS", 2, dggs_vert0_lon=11.20)
+    assert "dggs_vert0_lon 11.2" in dggrid.last_ops_meta
+    assert "dggs_orient_specify_type SPECIFIED" in dggrid.last_ops_meta
+
+
+def test_v9_bool_parameter_upper_case():
+    dggrid = _dggrid91()
+    dggrid.grid_cellids_for_extent("ISEA7HL", 6, clip_geom=TARTU_BOX, clip_using_holes=True)
+    assert "clip_using_holes TRUE" in dggrid.last_ops_meta
