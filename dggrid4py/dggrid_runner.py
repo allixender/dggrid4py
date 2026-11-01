@@ -843,8 +843,22 @@ class DGGRID(abc.ABC):
         return self._dggrid_version
 
 
+    def _metafile_for_executable(self, dggs_meta_ops):
+        # Since DGGRID 9.1, dggs_type IGEO7 means IGEO7v2, with geodetic latitudes in input and output. The classes
+        # for DGGRID 7 and 8 define IGEO7 without a datum conversion, which is IGEO7v1 in DGGRID 9.1. Without this,
+        # latitudes that are already authalic (dggrid4py.auxlat, igeo7_ext) would be converted a second time.
+        if (
+            self.version < 9
+            and 'dggs_type IGEO7' in dggs_meta_ops
+            and (self.dggrid_version or (0, 0)) >= (9, 1)
+        ):
+            return ['dggs_type IGEO7v1' if line == 'dggs_type IGEO7' else line for line in dggs_meta_ops]
+        return dggs_meta_ops
+
+
     def run(self, dggs_meta_ops):
 
+        dggs_meta_ops = self._metafile_for_executable(dggs_meta_ops)
         curdir = os.getcwd()
         tmp_id = uuid.uuid4()
 
