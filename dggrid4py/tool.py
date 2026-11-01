@@ -4,7 +4,6 @@ Download of the portable DGGRID binaries from https://github.com/allixender/DGGR
 The portable binaries are built without GDAL, use them with ``has_gdal=False``.
 """
 import hashlib
-import os
 import platform
 import shutil
 import stat
