@@ -36,7 +36,7 @@ def test_portable_asset_name_unsupported_platform():
 
 def test_portable_release_lines():
     assert tool.DEFAULT_LINE == "stable"
-    assert tool.portable_release() == tool.PORTABLE_LINES["stable"] == "v8.44"
+    assert tool.portable_release() == tool.PORTABLE_LINES["stable"] == "v9.1"
     assert tool.portable_release("edge") == "edge"
     # any other value is the release tag itself
     assert tool.portable_release("edge-v91b") == "edge-v91b"
@@ -96,12 +96,12 @@ def test_get_portable_executable_unpacks_and_caches(tmp_path, monkeypatch):
 
     # the default line is 'stable', each release gets its own subfolder
     executable = tool.get_portable_executable(folder)
-    assert executable == str((folder / "v8.44" / "dggrid-9.0b-linux-x86_64" / "dggrid").resolve())
+    assert executable == str((folder / "v9.1" / "dggrid-9.0b-linux-x86_64" / "dggrid").resolve())
     assert os.access(executable, os.X_OK)
     assert release.fetched == ["SHA256SUMS", release.asset]
-    assert set(release.releases) == {"v8.44"}
+    assert set(release.releases) == {"v9.1"}
     # no archive or checksum list is left behind
-    assert sorted(p.name for p in (folder / "v8.44").iterdir() if not p.name.startswith(".")) == ["dggrid-9.0b-linux-x86_64"]
+    assert sorted(p.name for p in (folder / "v9.1").iterdir() if not p.name.startswith(".")) == ["dggrid-9.0b-linux-x86_64"]
 
     # same release checksum: the binary is used again, only the checksums are looked up
     assert tool.get_portable_executable(folder) == executable
@@ -114,7 +114,7 @@ def test_get_portable_executable_unpacks_and_caches(tmp_path, monkeypatch):
     # the rolling release was rebuilt: downloaded again
     release.build({"dggrid-9.1-linux-x86_64/dggrid": b"#!/bin/sh\necho new\n"})
     rebuilt = tool.get_portable_executable(folder)
-    assert rebuilt == str((folder / "v8.44" / "dggrid-9.1-linux-x86_64" / "dggrid").resolve())
+    assert rebuilt == str((folder / "v9.1" / "dggrid-9.1-linux-x86_64" / "dggrid").resolve())
 
     # offline: the binary that is already there is returned
     release.offline = True
@@ -130,8 +130,8 @@ def test_get_portable_executable_lines_side_by_side(tmp_path, monkeypatch):
     stable = tool.get_portable_executable(folder)
     edge = tool.get_portable_executable(folder, line="edge")
     other = tool.get_portable_executable(folder, line="edge-v91b")
-    assert release.releases == ["v8.44", "v8.44", "edge", "edge", "edge-v91b", "edge-v91b"]
-    assert [Path(p).relative_to(folder.resolve()).parts[0] for p in (stable, edge, other)] == ["v8.44", "edge", "edge-v91b"]
+    assert release.releases == ["v9.1", "v9.1", "edge", "edge", "edge-v91b", "edge-v91b"]
+    assert [Path(p).relative_to(folder.resolve()).parts[0] for p in (stable, edge, other)] == ["v9.1", "edge", "edge-v91b"]
     assert all(os.path.isfile(p) for p in (stable, edge, other))
 
     # the binaries of the other lines stay in place
@@ -159,7 +159,7 @@ def test_get_portable_executable_checksum_mismatch(tmp_path, monkeypatch):
     (release.source / "SHA256SUMS").write_text(f"{'0' * 64}  {release.asset}\n")
     with pytest.raises(ValueError, match="checksum of dggrid-linux-x86_64.tar.gz does not match"):
         tool.get_portable_executable(tmp_path / "bin")
-    assert not any(p.name.startswith("dggrid") for p in (tmp_path / "bin" / "v8.44").iterdir())
+    assert not any(p.name.startswith("dggrid") for p in (tmp_path / "bin" / "v9.1").iterdir())
 
 
 def test_get_portable_executable_missing_checksum(tmp_path, monkeypatch):

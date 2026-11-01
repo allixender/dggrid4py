@@ -1,12 +1,13 @@
 """
-IGEO7 convenience wrappers around :class:`dggrid4py.DGGRIDv8`.
+IGEO7 convenience wrappers around :class:`dggrid4py.DGGRIDv9` and :class:`dggrid4py.DGGRIDv8`.
 
-All wrappers apply the current IGEO7 best practice:
+All wrappers apply the current IGEO7 best practice and return the same cell identifiers with both classes:
 
-- DGGRIDv8 only, with the Z7 hierarchical index (``HIERNDX`` / ``Z7``)
-- ``dggs_vert0_lon = 11.20`` (DGGRID's default is 11.25)
-- WGS84 geometries are converted to the authalic sphere before they are passed to DGGRID,
-  and DGGRID output geometries are converted back to WGS84 (geodetic latitude)
+- the Z7 hierarchical index (``HIERNDX`` / ``Z7``)
+- ``dggs_vert0_lon = 11.20`` (the default of ``IGEO7`` in DGGRID 8 is 11.25)
+- WGS84 geometries in input and output. ``DGGRIDv9`` uses ``IGEO7v2`` of DGGRID 9.1, which is defined that way. For
+  ``DGGRIDv8``, they are converted to the authalic sphere before they are passed to DGGRID, and the DGGRID output
+  geometries are converted back to WGS84 (geodetic latitude)
 """
 from pathlib import Path
 import copy
@@ -21,7 +22,7 @@ from shapely.geometry import Point, Polygon
 
 from dggrid4py import igeo7
 from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic, transform_xy
-from dggrid4py.dggrid_runner import DGGRIDv8
+from dggrid4py.dggrid_runner import DGGRIDv8, DGGRIDv9
 
 IGEO7_VERT0_LON = 11.20
 
@@ -50,19 +51,24 @@ def dggrid_get_res(dggrid_instance, dggrid_dggs="ISEA7H", max_res=16):
     return isea7h_res
 
 
-def igeo7_meta_config(hier_ndx_form='DIGIT_STRING', **overrides):
+def igeo7_meta_config(hier_ndx_form='DIGIT_STRING', dggrid_instance=None, **overrides):
     """
-    DGGRIDv8 meta configuration for IGEO7 with the Z7 index.
+    Meta configuration for IGEO7 with the Z7 index.
 
     Args:
         hier_ndx_form (str): ``DIGIT_STRING`` (e.g. ``'003456231'``) or ``INT64``
             (DGGRID writes this as the 16 character Z7 hex string, e.g. ``'0042097fffffffff'``)
+        dggrid_instance: the instance that the configuration is for. A :class:`DGGRIDv9` instance only needs the form
+            of the index, everything else is defined by ``IGEO7v2``. Without an instance, the configuration
+            is the one for :class:`DGGRIDv8`
         **overrides: any other DGGRID parameters, e.g. ``dggs_vert0_lon`` to change the default 11.20
 
     Returns:
-        dict: keyword arguments for the DGGRIDv8 functions
+        dict: keyword arguments for the functions of the DGGRID instance
     """
     hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
+    if isinstance(dggrid_instance, DGGRIDv9):
+        return {"input_hier_ndx_form": hier_ndx_form, "output_hier_ndx_form": hier_ndx_form, **overrides}
     meta = {
         "input_address_type": "HIERNDX",
         "input_hier_ndx_system": "Z7",
@@ -91,12 +97,24 @@ def _normalise_hier_ndx_form(hier_ndx_form):
     return hier_ndx_form
 
 
-def _require_dggrid_v8(dggrid_instance):
-    if not isinstance(dggrid_instance, DGGRIDv8):
+def _require_igeo7_instance(dggrid_instance):
+    if not isinstance(dggrid_instance, (DGGRIDv8, DGGRIDv9)):
         raise TypeError(
-            "IGEO7 wrappers require a DGGRIDv8 instance (DGGRID >= 8.41 with the Z7 hierarchical index), "
+            "IGEO7 wrappers require a DGGRIDv9 or DGGRIDv8 instance (DGGRID >= 8.41 with the Z7 hierarchical index), "
             f"got {type(dggrid_instance).__name__}"
         )
+
+
+def _authalic_conversion_needed(dggrid_instance):
+    # IGEO7v2 of DGGRID 9.1 takes and returns WGS84, in DGGRIDv8 everything is on the authalic sphere
+    return not isinstance(dggrid_instance, DGGRIDv9)
+
+
+def _stay_on_sphere(dggrid_instance, to_geodetic, meta):
+    # to_geodetic=False: the coordinates of the output stay on DGGRID's authalic sphere
+    if not to_geodetic and isinstance(dggrid_instance, DGGRIDv9):
+        return {**meta, "output_datum": "AUTHALIC_SPHERE"}
+    return meta
 
 
 def _cell_id_list(cell_ids):
@@ -117,7 +135,7 @@ def z7_resolution(cell_id, hier_ndx_form='DIGIT_STRING'):
 
 
 def _from_cellids(func_name, cell_ids, dggrid_instance, hier_ndx_form, to_geodetic, meta_overrides):
-    _require_dggrid_v8(dggrid_instance)
+    _require_igeo7_instance(dggrid_instance)
     hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
     cell_id_list = _cell_id_list(cell_ids)
     resolution = z7_resolution(cell_id_list[0], hier_ndx_form)
@@ -125,9 +143,9 @@ def _from_cellids(func_name, cell_ids, dggrid_instance, hier_ndx_form, to_geodet
         cell_id_list,
         dggs_type='IGEO7',
         resolution=resolution,
-        **igeo7_meta_config(hier_ndx_form, **meta_overrides),
+        **_stay_on_sphere(dggrid_instance, to_geodetic, igeo7_meta_config(hier_ndx_form, dggrid_instance, **meta_overrides)),
     )
-    if to_geodetic:
+    if to_geodetic and _authalic_conversion_needed(dggrid_instance):
         gdf['geometry'] = geoseries_to_geodetic(gdf.geometry)
     gdf = gdf.set_crs(4326, allow_override=True)
     return gdf
@@ -157,19 +175,20 @@ def dggrid_igeo7_grid_cell_polygons_for_extent(clip_geom, resolution, dggrid_ins
     """
     IGEO7 cell polygons at ``resolution`` covering ``clip_geom`` (a shapely geometry in WGS84).
 
-    The clip geometry is converted to the authalic sphere before it is passed to DGGRID, and the
-    resulting cell polygons are converted back to WGS84 (unless ``to_geodetic=False``).
+    The returned cell polygons are in WGS84, unless ``to_geodetic=False`` (then the coordinates stay on DGGRID's
+    authalic sphere). With :class:`DGGRIDv8`, the clip geometry is converted to the authalic sphere before it is passed
+    to DGGRID, and the resulting cell polygons are converted back.
     """
-    _require_dggrid_v8(dggrid_instance)
+    _require_igeo7_instance(dggrid_instance)
     hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
-    clip_authalic = geoseries_to_authalic(gpd.GeoSeries([clip_geom])).iloc[0]
+    conversion = _authalic_conversion_needed(dggrid_instance)
     gdf = dggrid_instance.grid_cell_polygons_for_extent(
         'IGEO7',
         resolution,
-        clip_geom=clip_authalic,
-        **igeo7_meta_config(hier_ndx_form, **meta_overrides),
+        clip_geom=geoseries_to_authalic(gpd.GeoSeries([clip_geom])).iloc[0] if conversion else clip_geom,
+        **_stay_on_sphere(dggrid_instance, to_geodetic, igeo7_meta_config(hier_ndx_form, dggrid_instance, **meta_overrides)),
     )
-    if to_geodetic:
+    if to_geodetic and conversion:
         gdf['geometry'] = geoseries_to_geodetic(gdf.geometry)
     gdf = gdf.set_crs(4326, allow_override=True)
     return gdf
@@ -179,16 +198,18 @@ def dggrid_igeo7_cells_for_geo_points(geodf_points_wgs84, resolution, dggrid_ins
     """
     Assign IGEO7 Z7 cell ids at ``resolution`` to WGS84 points.
 
-    The point latitudes are converted to the authalic sphere before they are passed to DGGRID.
+    With :class:`DGGRIDv8`, the point latitudes are converted to the authalic sphere before they are passed to DGGRID.
     Returns a copy of ``geodf_points_wgs84`` (geometry unchanged, in WGS84) with the cell ids in ``column``.
     Use :func:`dggrid_igeo7_grid_cell_polygons_from_cellids` to get the cell polygons for these ids.
     """
-    _require_dggrid_v8(dggrid_instance)
+    _require_igeo7_instance(dggrid_instance)
     hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
-    meta = igeo7_meta_config(hier_ndx_form, **meta_overrides)
-    points_authalic = gpd.GeoDataFrame(geometry=geoseries_to_authalic(geodf_points_wgs84.geometry.reset_index(drop=True)), crs=4326)
+    meta = igeo7_meta_config(hier_ndx_form, dggrid_instance, **meta_overrides)
+    points = geodf_points_wgs84.geometry.reset_index(drop=True)
+    if _authalic_conversion_needed(dggrid_instance):
+        points = geoseries_to_authalic(points)
     cells = dggrid_instance.cells_for_geo_points(
-        points_authalic,
+        gpd.GeoDataFrame(geometry=points, crs=4326),
         True,
         'IGEO7',
         resolution,
@@ -203,11 +224,11 @@ def dggrid_igeo7_q2di_from_cellids(series, dggrid_instance, hier_ndx_form='DIGIT
     """
     Q2DI (quad, i, j) addresses for a list of IGEO7 Z7 cell ids (all of the same resolution).
     """
-    _require_dggrid_v8(dggrid_instance)
+    _require_igeo7_instance(dggrid_instance)
     hier_ndx_form = _normalise_hier_ndx_form(hier_ndx_form)
     cell_id_list = _cell_id_list(series)
     resolution = z7_resolution(cell_id_list[0], hier_ndx_form)
-    meta = {k: v for k, v in igeo7_meta_config(hier_ndx_form, **meta_overrides).items() if not k.startswith('output_')}
+    meta = {k: v for k, v in igeo7_meta_config(hier_ndx_form, dggrid_instance, **meta_overrides).items() if not k.startswith('output_')}
 
     q2di_df = dggrid_instance.address_transform(cell_id_list,
                                                 'IGEO7',
@@ -258,7 +279,7 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
     """
     import pyproj
 
-    _require_dggrid_v8(dggrid_instance)
+    _require_igeo7_instance(dggrid_instance)
     z7_str = str(z7_str)
     resolution = igeo7.get_z7string_resolution(z7_str)
     parent, local_pos, is_center = igeo7.get_z7string_local_pos(z7_str)
@@ -292,10 +313,13 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
         neighbour_field_clip = transform_xy(inverse, neighbour_field_local_clip)
 
     # neighbour_field is already on the authalic sphere, pass it to DGGRID as is
+    meta = igeo7_meta_config('DIGIT_STRING', dggrid_instance, **meta_overrides)
+    if not _authalic_conversion_needed(dggrid_instance):
+        meta = {**meta, "input_datum": "AUTHALIC_SPHERE", "output_datum": "AUTHALIC_SPHERE"}
     k_ring_group = dggrid_instance.grid_cell_centroids_for_extent('IGEO7',
                                                                   resolution,
                                                                   clip_geom=neighbour_field,
-                                                                  **igeo7_meta_config('DIGIT_STRING', **meta_overrides))
+                                                                  **meta)
     k_ring_group = k_ring_group.set_crs(4326, allow_override=True)
     k_ring_group['name'] = k_ring_group['name'].astype(str)
     if stricter_clip:

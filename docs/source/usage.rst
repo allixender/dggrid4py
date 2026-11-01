@@ -21,8 +21,8 @@ dggrid4py from PyPI, so you don't need to compile anything.
    $ pixi add --pypi dggrid4py
 
 ``dggrid4py`` pulls in ``pygeodesy`` from PyPI (it is not available on conda-forge).
-This installs the current DGGRID version from conda-forge, which is DGGRID 9.1 at the moment; IGEO7 with DGGRID 9.1
-needs dggrid4py 0.6.1 or newer (see :ref:`igeo7_dggrid91`).
+This installs the current DGGRID version from conda-forge, which is DGGRID 9.1 at the moment; this needs the
+``DGGRIDv9`` class, or the ``DGGRIDv8`` class with dggrid4py 0.6.1 or newer (see :ref:`igeo7_dggrid91`).
 Check that the ``dggrid`` executable is available in the environment:
 
 .. code-block:: console
@@ -36,9 +36,9 @@ Inside the pixi environment, DGGRID lives on the ``PATH``, so you can point dggr
 
    import shutil
    import tempfile
-   from dggrid4py import DGGRIDv8
+   from dggrid4py import DGGRIDv9
 
-   dggrid_instance = DGGRIDv8(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
+   dggrid_instance = DGGRIDv9(executable=shutil.which("dggrid"), working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True)
 
 Run your scripts with ``pixi run python my_script.py`` or open a shell in the environment with ``pixi shell``.
 
@@ -95,20 +95,20 @@ available for Linux, macOS and Windows (x86_64 and arm64 each) and have no furth
 
    import tempfile
 
-   from dggrid4py import DGGRIDv8, tool
+   from dggrid4py import DGGRIDv9, tool
 
    # downloads and unpacks the binary for the current platform into the given folder (only once)
    dggrid_exec = tool.get_portable_executable("dggrid_portable")
-   dggrid_instance_portable = DGGRIDv8(executable=dggrid_exec, working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True, has_gdal=False)
+   dggrid_instance_portable = DGGRIDv9(executable=dggrid_exec, working_dir=tempfile.mkdtemp(), capture_logs=False, silent=True, has_gdal=False)
 
 ``get_portable_executable`` verifies the downloaded archive against the SHA256 checksums of the release, unpacks it
 and returns the path of the executable. A binary that is already in the folder is used again, and it is also
 returned if there is no network connection. The portable binaries are published in several lines, which are
 selected with the ``line`` argument:
 
-- ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 8.44;
-- ``edge`` is a rolling pre-release that follows the DGGRID development version (currently DGGRID 9.1), and it is
-  downloaded again after it was rebuilt;
+- ``stable`` (default) is the DGGRID release that this version of dggrid4py is tested with, currently DGGRID 9.1;
+- ``edge`` is a rolling pre-release that follows the DGGRID development version, and it is downloaded again after
+  it was rebuilt;
 - any other value is taken as a release tag of DGGRID_portables, e.g. ``v8.44`` or ``v9.1`` for a specific DGGRID release.
 
 .. code:: python
@@ -122,8 +122,8 @@ should be considered:
   then exchanges Shapefiles with DGGRID, and the returned GeoDataFrames have the same columns and cell identifiers
   as with a GDAL build;
 - DGGRID 9 removes the address types ``Z7``, ``Z7_STRING`` and their Z3 and ZORDER counterparts, as well as the
-  ``DGGRIDv7`` way of clipping by sequence numbers, so the ``edge`` binaries have to be used with the ``DGGRIDv8`` or
-  the ``DGGRIDv9`` class;
+  ``DGGRIDv7`` way of clipping by sequence numbers, so these binaries have to be used with the ``DGGRIDv9`` or the
+  ``DGGRIDv8`` class;
 - on macOS, a binary that was downloaded with a web browser has to be cleared once with
   ``xattr -d com.apple.quarantine dggrid``, because the binaries are not notarised; this is not needed for the
   download with ``get_portable_executable``;
@@ -264,8 +264,9 @@ IGEO7 Usage
 
 IGEO7 is the ISEA7H grid with the Z7 hierarchical index. In contrast to the classical DGGS types above, the
 IGEO7 used in dggrid4py is defined with a different orientation (``dggs_vert0_lon = 11.20``) and on the WGS84
-ellipsoid, which requires a conversion to authalic latitudes around each DGGRID call. The wrappers in
-:mod:`dggrid4py.igeo7_ext` apply both for you:
+ellipsoid. DGGRID 9.1 defines it that way as ``IGEO7v2``, while with DGGRID 8 it requires a conversion to authalic
+latitudes around each DGGRID call. The wrappers in :mod:`dggrid4py.igeo7_ext` handle both cases with a ``DGGRIDv9``
+or a ``DGGRIDv8`` instance:
 
 .. code:: python
 

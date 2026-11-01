@@ -19,7 +19,7 @@ PORTABLES_URL = "https://github.com/allixender/DGGRID_portables/releases/downloa
 # 'stable' is the DGGRID release that this dggrid4py version is tested with,
 # 'edge' is the rolling pre-release, built from the current DGGRID master
 PORTABLE_LINES = {
-    "stable": "v8.44",
+    "stable": "v9.1",
     "edge": "edge",
 }
 DEFAULT_LINE = "stable"
