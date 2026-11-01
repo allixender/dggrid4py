@@ -2169,6 +2169,81 @@ class DGGRIDv9(DGGRID):
     def _stats_dggs_type(self, dggs_type):
         return dggs_type
 
+    def _preset_address_type(self, dggs_type):
+        return 'HIERNDX' if dggs_type in dggs_types_hierarchical_v9 else 'SEQNUM'
+
+    def _extent_address_type(self, dggs_type, output_address_type):
+        # for a hierarchical preset the address type has to be in the metafile, DGGRIDv8 and DGGRIDv9 write
+        # the fields of the index (e.g. output_hier_ndx_form) only together with it
+        if output_address_type is None and dggs_type in dggs_types_hierarchical_v9:
+            return 'HIERNDX'
+        return output_address_type
+
+    def grid_cell_polygons_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                      split_dateline=False, output_address_type=None, **conf_extra):
+        return super().grid_cell_polygons_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom, split_dateline,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cell_centroids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                       output_address_type=None, **conf_extra):
+        return super().grid_cell_centroids_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cellids_for_extent(self, dggs_type, resolution, mixed_aperture_level=None, clip_geom=None,
+                                output_address_type=None, **conf_extra):
+        return super().grid_cellids_for_extent(
+            dggs_type, resolution, mixed_aperture_level, clip_geom,
+            self._extent_address_type(dggs_type, output_address_type), **conf_extra)
+
+    def grid_cell_polygons_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                                        split_dateline=False, clip_subset_type='WHOLE_EARTH', clip_cell_res=1,
+                                        input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.grid_cell_polygons_from_cellids`, but the cell ids have the form of the preset by default:
+        ``HIERNDX`` for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().grid_cell_polygons_from_cellids(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level, split_dateline, clip_subset_type, clip_cell_res,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
+
+    def grid_cell_centroids_from_cellids(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                                         clip_subset_type='WHOLE_EARTH', clip_cell_res=1,
+                                         input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.grid_cell_centroids_from_cellids`, but the cell ids have the form of the preset by default:
+        ``HIERNDX`` for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().grid_cell_centroids_from_cellids(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level, clip_subset_type, clip_cell_res,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
+
+    def cells_for_geo_points(self, geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level=None,
+                             split_dateline=False, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.cells_for_geo_points`, but the cell ids have the form of the preset by default: ``HIERNDX``
+        for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``. How the coordinates are read depends
+        on the preset: geodetic latitudes for an ellipsoidal preset (e.g. IGEO7 or ISEA7HL), and latitudes on the
+        authalic sphere for a spherical one (e.g. ISEA7H or IGEO7v1).
+        """
+        return super().cells_for_geo_points(
+            geodf_points_wgs84, cell_ids_only, dggs_type, resolution, mixed_aperture_level, split_dateline,
+            output_address_type or self._preset_address_type(dggs_type), **conf_extra)
+
+    def address_transform(self, cell_id_list, dggs_type, resolution, mixed_aperture_level=None,
+                          input_address_type=None, output_address_type=None, **conf_extra):
+        """
+        As in :meth:`DGGRID.address_transform`, but the address types are the form of the preset by default: ``HIERNDX``
+        for a preset with a hierarchical index (e.g. IGEO7), otherwise ``SEQNUM``.
+        """
+        preset = self._preset_address_type(dggs_type)
+        return super().address_transform(
+            cell_id_list, dggs_type, resolution, mixed_aperture_level,
+            input_address_type or preset, output_address_type or preset, **conf_extra)
+
 
 class AnyDGGRID(DGGRID):
     version = 0

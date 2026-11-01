@@ -132,3 +132,77 @@ def test_v9_every_preset_generates_cells_and_stats(dggs_type):
     cells = dggrid.grid_cell_polygons_for_extent(dggs_type, resolution)
     assert len(cells) == stats["Cells"].iloc[-1]
     assert cells["name"].is_unique
+
+
+@pytest.mark.parametrize("resolution", [5, 6, 9])
+def test_v9_igeo7_reference_cells_in_digit_string_form(resolution):
+    dggrid = _dggrid91()
+    cells = dggrid.cells_for_geo_points(_points(), True, "IGEO7", resolution, output_hier_ndx_form="DIGIT_STRING")
+    assert cells["name"].tolist() == [REFERENCE[LISBON][resolution], REFERENCE[TARTU][resolution]]
+
+
+def test_v9_igeo7_default_form_is_int64_hex_and_round_trips():
+    dggrid = _dggrid91()
+    ids = dggrid.cells_for_geo_points(_points(), True, "IGEO7", 9)["name"].tolist()
+    assert all(len(cell_id) == 16 for cell_id in ids)
+    # a Z7 id can't be taken for a sequence number
+    polygons = dggrid.grid_cell_polygons_from_cellids(ids, "IGEO7", 9)
+    assert sorted(polygons["name"]) == sorted(ids)
+    digits = dggrid.address_transform(ids, "IGEO7", 9, output_hier_ndx_form="DIGIT_STRING", output_cell_label_type="OUTPUT_ADDRESS_TYPE")
+    assert digits["HIERNDX"].tolist() == [REFERENCE[LISBON][9], REFERENCE[TARTU][9]]
+
+
+def test_v9_digit_string_input():
+    dggrid = _dggrid91()
+    digits = [REFERENCE[LISBON][9], REFERENCE[TARTU][9]]
+    polygons = dggrid.grid_cell_polygons_from_cellids(digits, "IGEO7", 9, **DIGITS)
+    assert sorted(polygons["name"]) == sorted(digits)
+    for x, y in (LISBON, TARTU):
+        assert polygons.contains(shapely.Point(x, y)).sum() == 1
+    centroids = dggrid.grid_cell_centroids_from_cellids(digits, "IGEO7", 9, **DIGITS)
+    assert sorted(centroids["name"]) == sorted(digits)
+
+
+def test_v9_cells_for_geo_points_polygons():
+    dggrid = _dggrid91()
+    cells = dggrid.cells_for_geo_points(_points(), False, "IGEO7", 9, output_hier_ndx_form="DIGIT_STRING")
+    assert cells["zone"].tolist() == [REFERENCE[LISBON][9], REFERENCE[TARTU][9]]
+    assert cells["city"].tolist() == ["Lisbon", "Tartu"]
+
+
+def test_v9_non_hierarchical_preset_stays_seqnum():
+    dggrid = _dggrid91()
+    polygons = dggrid.grid_cell_polygons_from_cellids([1, 4, 8], "ISEA7HL", 3)
+    assert sorted(polygons["name"]) == [1, 4, 8]
+    assert dggrid.address_transform([1, 4], "ISEA7HL", 3, output_address_type="Q2DI").columns.tolist() == ["SEQNUM", "Q2DI"]
+
+
+def test_v9_coarse_cells():
+    dggrid = _dggrid91()
+    cells = dggrid.grid_cell_polygons_from_cellids(
+        ["000102245"], "IGEO7", 9, clip_subset_type="COARSE_CELLS", clip_cell_res=7, **DIGITS,
+    )
+    assert sum(str(name).startswith("000102245") for name in cells["name"]) == 49
+
+
+def test_v9_extent_same_cells_as_v8_recipe():
+    path = _dggrid91().executable
+    v8 = DGGRIDv8(executable=path, working_dir=tempfile.mkdtemp(), capture_logs=True, silent=True)
+    from dggrid4py import igeo7_ext
+    wrapper = igeo7_ext.dggrid_igeo7_grid_cell_polygons_for_extent(TARTU_BOX, 8, v8)
+    cells = _dggrid91().grid_cell_polygons_for_extent("IGEO7", 8, clip_geom=TARTU_BOX, output_hier_ndx_form="DIGIT_STRING")
+    assert set(cells["name"]) == set(wrapper["name"])
+
+
+@pytest.mark.parametrize("func_name", ["grid_cell_polygons_for_extent", "grid_cell_centroids_for_extent"])
+def test_v9_extent_hierarchical_form_is_not_dropped(func_name):
+    dggrid = _dggrid91()
+    cells = getattr(dggrid, func_name)("IGEO7", 6, clip_geom=TARTU_BOX, output_hier_ndx_form="DIGIT_STRING")
+    assert all(name.startswith("000") and len(name) == 8 for name in cells["name"])
+    assert "output_hier_ndx_form DIGIT_STRING" in dggrid.last_ops_meta
+
+
+def test_v9_cellids_for_extent_hierarchical_form():
+    dggrid = _dggrid91()
+    cells = dggrid.grid_cellids_for_extent("IGEO7", 6, clip_geom=TARTU_BOX, output_hier_ndx_form="DIGIT_STRING")
+    assert all(len(name) == 8 for name in cells[0])
