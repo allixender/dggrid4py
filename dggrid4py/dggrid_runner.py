@@ -286,6 +286,47 @@ dggrid_operations = get_args(DggridOperationsT)
 
 DggsDegree = decimal.Decimal | float | str   # allow string to hardcode strictly
 
+# DGGRID 9.1, names as in the dggs_type parameter of DGGRID. H3 needs a DGGRID built with H3, and there is no such
+# build to test with. S: spherical, L: on the WGS84 ellipsoid, Z: with a hierarchical index
+dggs_types_hierarchical_v9 = (
+    'IGEO7', 'IGEO7v1', 'IGEO7v2',
+    'ISEA3HSZ', 'ISEA4HSZ', 'ISEA7HSZ', 'ISEA3HLZ', 'ISEA4HLZ', 'ISEA7HLZ',
+    'IVEA3HSZ', 'IVEA4HSZ', 'IVEA7HSZ', 'IVEA3HLZ', 'IVEA4HLZ', 'IVEA7HLZ',
+)
+dggs_types_v9 = (
+    'SUPERFUND', 'PLANETRISK',
+    'ISEA3H', 'ISEA4H', 'ISEA7H', 'ISEA43H', 'ISEA4T', 'ISEA4D',
+    'ISEA3HS', 'ISEA4HS', 'ISEA7HS', 'ISEA43HS', 'ISEA4TS', 'ISEA4DS',
+    'ISEA3HL', 'ISEA4HL', 'ISEA7HL', 'ISEA43HL', 'ISEA4TL', 'ISEA4DL',
+    'IVEA3HS', 'IVEA4HS', 'IVEA7HS', 'IVEA43HS', 'IVEA4TS', 'IVEA4DS',
+    'IVEA3HL', 'IVEA4HL', 'IVEA7HL', 'IVEA43HL', 'IVEA4TL', 'IVEA4DL',
+    'FULLER3H', 'FULLER4H', 'FULLER7H', 'FULLER43H', 'FULLER4T', 'FULLER4D',
+) + dggs_types_hierarchical_v9
+
+output_address_types_v9 = ('GEO', 'Q2DI', 'SEQNUM', 'PLANE', 'Q2DD', 'PROJTRI', 'VERTEX2DD', 'HIERNDX')
+input_address_types_v9 = ('GEO', 'Q2DI', 'SEQNUM', 'Q2DD', 'PROJTRI', 'VERTEX2DD', 'HIERNDX')
+clip_subset_types_v9 = ('SHAPEFILE', 'WHOLE_EARTH', 'GDAL', 'AIGEN', 'COARSE_CELLS', 'COARSE_CELL_FILES', 'ADDRESS_FILES')
+
+# DGGRID 9.1 parameters that go to the metafile as given. dggrid4py sets the file names, delimiters, the operation
+# and the clipping by itself, and the parameters of Dggs and the address types have their own handling
+dggs_extra_fields_v9 = (
+    'bin_coverage', 'bin_method', 'cell_output_control', 'children_output_file_name', 'children_output_type',
+    'clip_type', 'clip_using_holes', 'custom_sphere_radius', 'dggs_aperture_sequence', 'dggs_aperture_type',
+    'dggs_base_poly', 'dggs_num_placements', 'dggs_orient_output_file_name', 'dggs_orient_preset',
+    'dggs_orient_rand_seed', 'dggs_orient_specify_type', 'dggs_res_specify_rnd_down', 'dggs_res_specify_type',
+    'hier_indexing_system_type', 'indexing_children_output_file_name', 'indexing_children_output_type',
+    'indexing_parent_output_file_name', 'indexing_parent_output_type', 'input_address_field_name',
+    'input_address_field_type', 'input_datum', 'input_value_field_name', 'kml_default_color', 'kml_default_width',
+    'kml_description', 'kml_name', 'longitude_wrap_mode', 'max_cells_per_output_file', 'neighbor_output_file_name',
+    'neighbor_output_type', 'orientation_datum', 'output_count', 'output_count_field_name', 'output_datum',
+    'output_file_type', 'output_first_seqnum', 'output_last_seqnum', 'output_mean', 'output_mean_field_name',
+    'output_num_classes', 'output_num_classes_field_name', 'output_presence_vector',
+    'output_presence_vector_field_name', 'output_total', 'output_total_field_name', 'point_input_file_type',
+    'point_input_gdal_format', 'polyclip_algo', 'randpts_concatenate_output', 'randpts_num_per_cell',
+    'randpts_output_file_name', 'randpts_output_type', 'randpts_seed', 'region_center_lat', 'region_center_lon',
+    'rng_type', 'sphere_radius_type', 'unwrap_points', 'verbosity', 'z3_invalid_digit',
+)
+
 DggridMetaConfigParameterT = str | float | int
 DggridMetaConfigT = TypedDict(
     "DggridMetaConfigT",
