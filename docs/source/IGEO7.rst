@@ -233,7 +233,22 @@ For the opposite direction, DGGRID offers ``clip_subset_type='COARSE_CELLS'``, w
     children = clipped[clipped["name"].str.startswith(coarse)]
     len(clipped), len(children)                    # (13, 7)
 
-The direct neighbours of a cell are available through ``igeo7_ext.z7_k1_ring_neighbours`` (see the wrapper example above). A function that enumerates the index children over several resolutions is not part of dggrid4py yet.
+With DGGRID 9.1, the ``DGGRIDv9`` class looks up the index children, the index parents and the neighbours directly in DGGRID, one resolution step at a time. Each function returns a DataFrame with one row per relation, and the cells are in the order of the input:
+
+.. code:: python
+
+    digits = {"input_hier_ndx_form": "DIGIT_STRING", "output_hier_ndx_form": "DIGIT_STRING"}
+
+    children = dggrid_v9.cell_children(["0001022"], "IGEO7", 5, **digits)
+    children["child"].tolist()                     # ['00010220', '00010221', ... , '00010226']
+
+    parents = dggrid_v9.cell_parents(["00010224"], "IGEO7", 6, **digits)
+    parents["parent"].tolist()                     # ['0001022']
+
+    neighbours = dggrid_v9.cell_neighbours(["00010224"], "IGEO7", 6, **digits)
+    len(neighbours)                                # 6
+
+The direct neighbours of a cell are also available through ``igeo7_ext.z7_k1_ring_neighbours`` (see the wrapper example above), which uses this lookup with ``DGGRIDv9`` and a spatial search around the cell with ``DGGRIDv8``. DGGRID 8 does not offer this lookup, so that the selection by prefix above remains the way to get the index children with ``DGGRIDv8``. A function that enumerates the index children over several resolutions at once is not part of dggrid4py yet, but the same result can be obtained by calling ``cell_children`` for each resolution step.
 
 
 Migrating from ``Z7_STRING`` and ``DGGRIDv7``

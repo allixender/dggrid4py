@@ -29,6 +29,8 @@ The names of the DGGS types follow DGGRID: ``S`` stands for the spherical form o
    # new parameters of DGGRID 9.1 are passed as keyword arguments
    cells = dggrid_instance.grid_cell_polygons_for_extent("ISEA7HL", 9, clip_geom=extent, polyclip_algo="CLIPPER1")
 
+The IVEA types use the Icosahedral Vertex-oriented great-circle Equal Area (IVEA) projection instead of ISEA, in the same spherical and ellipsoidal forms (e.g. ``IVEA7HS``, ``IVEA7HL`` and ``IVEA7HLZ``).
+
 The Fuller types need attention when moving from ``DGGRIDv8``, because DGGRID 9.1 changes their default orientation to DYMAXION. All cell identifiers therefore differ from the ones of ``DGGRIDv8``, which keeps the former orientation, while ``dggs_orient_preset="ISEA"`` returns the former identifiers. The low-level functions (``dgapi_*``) take a ``Dggs`` object, which is created with ``dgselect(dggs_type, minimal=True, res=...)`` for the same behaviour as above.
 
 .. currentmodule:: dggrid4py
@@ -67,3 +69,6 @@ The Fuller types need attention when moving from ``DGGRIDv8``, because DGGRID 9.
 
       ~DGGRIDv9.cells_for_geo_points
       ~DGGRIDv9.address_transform
+      ~DGGRIDv9.cell_parents
+      ~DGGRIDv9.cell_children
+      ~DGGRIDv9.cell_neighbours

@@ -44,7 +44,8 @@ Besides some low-level access to influence the metafile creation of the DGGRID o
 - grid_cellids_for_extent(): get_all_indexes/cell_ids for dggs at resolution (clip or world);
 - cells_for_geo_points(): poly_outline for point/centre at resolution;
 - address_transform(): conversion between cell_id address types, like SEQNUM, Q2DI or the hierarchical indexes;
-- grid_stats_table(): number of cells, cell area and spacing per resolution.
+- grid_stats_table(): number of cells, cell area and spacing per resolution;
+- cell_parents(), cell_children() and cell_neighbours(): lookup of the related cells (only `DGGRIDv9`).
 
 Use the `DGGRIDv8` class with DGGRID 8.42 or newer, including DGGRID 9.1, and the `DGGRIDv9` class for the new DGGS types and parameters of DGGRID 9.1 (e.g. `IGEO7v2`, `ISEA7HL` or `IVEA7HS`). IGEO7 with DGGRID 9.1, the current version on conda-forge, needs dggrid4py 0.6.1 or newer: dggrid4py 0.6.0 returns wrong cell identifiers there without an error, see [IGEO7 in DGGRID 9.1](https://dggrid4py.readthedocs.io/en/latest/IGEO7.html#igeo7-in-dggrid-9-1). The `DGGRIDv7` class for DGGRID 7 is deprecated since version 0.6.0 and will be removed in version 0.8.0.
 
@@ -163,13 +164,6 @@ dggrid_exec_edge = tool.get_portable_executable("dggrid_portable", line="edge")
 ```
 
 The default line `stable` is the DGGRID release that this version of dggrid4py is tested with (currently DGGRID 9.1). The archive is verified against the SHA256 checksums of the release. The binaries are built without GDAL, thus the instance has to be created with `has_gdal=False`, and they should be used with the `DGGRIDv9` or the `DGGRIDv8` class.
-
-## TODO:
-
-- get parent_for_cell_id at coarser resolution
-- get children_for_cell_id at finer resolution
-
-Remark: with the IGEO7/Z7 index system, the parent of a cell can be derived from the cell identifier. A function that enumerates the index children is still missing.
 
 ## Related work:
 

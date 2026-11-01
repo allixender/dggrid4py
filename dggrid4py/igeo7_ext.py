@@ -11,6 +11,7 @@ All wrappers apply the current IGEO7 best practice and return the same cell iden
 """
 from pathlib import Path
 import copy
+import logging
 import math
 import warnings
 
@@ -25,6 +26,8 @@ from dggrid4py.auxlat import geoseries_to_authalic, geoseries_to_geodetic, trans
 from dggrid4py.dggrid_runner import DGGRIDv8, DGGRIDv9
 
 IGEO7_VERT0_LON = 11.20
+
+logger = logging.getLogger(__name__)
 
 _legacy_address_types = {'Z7_STRING': 'DIGIT_STRING', 'Z7': 'INT64'}
 
@@ -270,18 +273,27 @@ def z7_is_pentagon(z7_str):
 
 
 
-def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **meta_overrides):
+def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m=None, stricter_clip=True, **meta_overrides):
     """
     Z7 ids (DIGIT_STRING form) of the direct neighbours of ``z7_str``.
 
-    ``cls_m`` is the characteristic length scale of the resolution in metres (see :func:`dggrid_get_res`).
-    All geometry work happens on DGGRID's authalic sphere, so no WGS84 conversion is needed here.
+    With :class:`DGGRIDv9`, DGGRID returns the neighbours by itself, and ``cls_m`` and ``stricter_clip`` are not used.
+    With :class:`DGGRIDv8`, ``cls_m`` is needed, which is the characteristic length scale of the resolution in metres
+    (see :func:`dggrid_get_res`). All geometry work happens on DGGRID's authalic sphere, so no WGS84 conversion
+    is needed there.
     """
     import pyproj
 
     _require_igeo7_instance(dggrid_instance)
     z7_str = str(z7_str)
     resolution = igeo7.get_z7string_resolution(z7_str)
+    if isinstance(dggrid_instance, DGGRIDv9):
+        neighbours = dggrid_instance.cell_neighbours(
+            [z7_str], 'IGEO7', resolution, **igeo7_meta_config('DIGIT_STRING', dggrid_instance, **meta_overrides)
+        )
+        return np.array(neighbours['neighbour'].tolist())
+    if cls_m is None:
+        raise ValueError("z7_k1_ring_neighbours needs cls_m with a DGGRIDv8 instance")
     parent, local_pos, is_center = igeo7.get_z7string_local_pos(z7_str)
 
     if is_center:
@@ -314,8 +326,6 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
 
     # neighbour_field is already on the authalic sphere, pass it to DGGRID as is
     meta = igeo7_meta_config('DIGIT_STRING', dggrid_instance, **meta_overrides)
-    if not _authalic_conversion_needed(dggrid_instance):
-        meta = {**meta, "input_datum": "AUTHALIC_SPHERE", "output_datum": "AUTHALIC_SPHERE"}
     k_ring_group = dggrid_instance.grid_cell_centroids_for_extent('IGEO7',
                                                                   resolution,
                                                                   clip_geom=neighbour_field,
@@ -331,10 +341,9 @@ def z7_k1_ring_neighbours(z7_str, dggrid_instance, cls_m, stricter_clip=True, **
 
 
 def suggest_window_blocks_per_chunk(rs_src, mem_use_mb):
-    print("########### suggest window blocks for mem use ##########")
     shapes = []
     for bs in rs_src.block_shapes:
-        print("block shapes:" + str(bs))
+        logger.info("block shapes: %s", bs)
         shapes.append(bs)
     block_shape = shapes[0]
 
@@ -345,10 +354,9 @@ def suggest_window_blocks_per_chunk(rs_src, mem_use_mb):
     proposed_squared_window_blocks = int(math.floor(base_num_blocks))
     baselength = base_num_blocks * block_shape[0]
     
-    print(
-        "suggested window_blocks per chunk -> {} (max number pixels of chuck side {} for {} mb in-mem use)".format(
-            proposed_squared_window_blocks, baselength, mem_use_mb
-        )
+    logger.info(
+        "suggested window_blocks per chunk -> %s (max number pixels of chuck side %s for %s mb in-mem use)",
+        proposed_squared_window_blocks, baselength, mem_use_mb,
     )
     return proposed_squared_window_blocks
 
@@ -521,8 +529,9 @@ def propose_dggs_level_for_pixel_length(dggrid_instance, pixel_edge_len, pix_siz
             resolution = idx
             break
 
-    print(
-        f"pixel_edge_len: {pixel_edge_len} - resolution: {resolution} - {dggrid_dggs} cls_m: {cls_m} m - avg cell_size: {average_hexagon_area_m2} m2"
+    logger.info(
+        "pixel_edge_len: %s - resolution: %s - %s cls_m: %s m - avg cell_size: %s m2",
+        pixel_edge_len, resolution, dggrid_dggs, cls_m, average_hexagon_area_m2,
     )
 
     return {'resolution': resolution, 'cls_m': cls_m, 'average_hexagon_area_m2': average_hexagon_area_m2}
