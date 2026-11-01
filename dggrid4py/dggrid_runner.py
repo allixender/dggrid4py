@@ -1451,7 +1451,7 @@ class DGGRID(abc.ABC):
 
         df = pd.DataFrame(dggs_ops['output_conf']['stats_output'])
 
-        df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"}, inplace=True)
+        df = df.rename(columns={0: 'Resolution', 1: "Cells", 2:"Area (km^2)", 3: "CLS (km)"})
         df['Resolution'] = df['Resolution'].astype(int)
         df['Cells'] = df['Cells'].astype(np.int64)
 
